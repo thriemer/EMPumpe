@@ -72,11 +72,11 @@ void mFunc_showParameter(uint8_t param)
     // setup function
     lcd.setCursor(0, 0);
     lcd.print(F("Arbeitsbreite:"));
-    lcd.setCursor(0, 1);
+    lcd.setCursor(15, 0);
     lcd.print(arbeitsBreiten[arbeitsBreitenIndex]);
-    lcd.setCursor(0, 2);
-    lcd.print(F("Liter pro Hektar:"));
-    lcd.setCursor(0, 3);
+    lcd.setCursor(0, 1);
+    lcd.print(F("L/Ha:"));
+    lcd.setCursor(6, 1);
     lcd.print(literProHektar);
   }
 
@@ -96,7 +96,9 @@ void mFunc_showParameter(uint8_t param)
   }
 }
 
-int _arbeitsBreitenIndex = 0;
+int _arbeitsBreitenIndex = -1;
+bool _exitedArbeitsBreite = true;
+bool _confirmedArbeitsBreite = false;
 // *********************************************************************
 void mFunc_setArbeitsbreite(uint8_t param)
 // *********************************************************************
@@ -105,9 +107,14 @@ void mFunc_setArbeitsbreite(uint8_t param)
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-    _arbeitsBreitenIndex = arbeitsBreitenIndex;
+    if (_exitedArbeitsBreite) {
+      _arbeitsBreitenIndex = arbeitsBreitenIndex;
+      _exitedArbeitsBreite = false;
+      _confirmedArbeitsBreite = false;
+    }
     lcd.setCursor(0, 0);
     lcd.print(F("Arbeitsbreite")); // print some content on first row
+    LCDML.FUNC_setLoopInterval(100);
   }
 
 
@@ -128,7 +135,7 @@ void mFunc_setArbeitsbreite(uint8_t param)
       }
     }
     if (LCDML.BT_checkEnter()) {
-      arbeitsBreitenIndex = _arbeitsBreitenIndex;
+      _confirmedArbeitsBreite = true;
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
@@ -137,6 +144,163 @@ void mFunc_setArbeitsbreite(uint8_t param)
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
   {
+    lcd.clear();
+    if (arbeitsBreitenIndex != _arbeitsBreitenIndex && _confirmedArbeitsBreite) {
+      arbeitsBreitenIndex = _arbeitsBreitenIndex;
+      lcd.setCursor(4, 0);
+      lcd.print("GESPEICHERT!");
+      lcd.setCursor(5, 1);
+      lcd.print("Neuer Wert:");
+      lcd.setCursor(8, 2);
+      lcd.print(arbeitsBreiten[_arbeitsBreitenIndex]);
+    } else {
+      lcd.setCursor(7, 1);
+      lcd.print("KEINE");
+      lcd.setCursor(5, 2);
+      lcd.print("AENDERUNG");
+    }
+    _exitedArbeitsBreite = true;
+    _confirmedArbeitsBreite = false;
+    delay(2000);
+  }
+}
+
+
+int _literProHektar = -1;
+bool _exitedLiterProHektar = true;
+bool _confirmedLiterProHektar = false;
+// *********************************************************************
+void mFunc_setLiterProHektar(uint8_t param)
+// *********************************************************************
+{
+  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    if (_exitedArbeitsBreite) {
+      _literProHektar = literProHektar;
+      _exitedLiterProHektar = false;
+      _confirmedLiterProHektar = false;
+    }
+    lcd.setCursor(0, 0);
+    lcd.print(F("Liter/Hektar")); // print some content on first row
+    LCDML.FUNC_setLoopInterval(100);
+  }
+
+
+  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  {
+    if (LCDML.BT_checkLeft()) {
+      LCDML.BT_resetLeft();
+      _literProHektar--;
+      if (_literProHektar < 10) {
+        _literProHektar = 10;
+      }
+    }
+    if (LCDML.BT_checkRight()) {
+      LCDML.BT_resetRight();
+      _literProHektar++;
+      if (_literProHektar > 2000) {
+        _literProHektar = 2000;
+      }
+    }
+    if (LCDML.BT_checkEnter()) {
+      _confirmedLiterProHektar = true;
+      LCDML.FUNC_goBackToMenu();
+    }
+    lcd.setCursor(0, 1);
+    lcd.print(_literProHektar);
+  }
+
+  if (LCDML.FUNC_close())     // ****** STABLE END *********
+  {
+    lcd.clear();
+    if (literProHektar != _literProHektar && _confirmedLiterProHektar) {
+      literProHektar = _literProHektar;
+      lcd.setCursor(4, 0);
+      lcd.print("GESPEICHERT!");
+      lcd.setCursor(5, 1);
+      lcd.print("Neuer Wert:");
+      lcd.setCursor(8, 2);
+      lcd.print(literProHektar);
+    } else {
+      lcd.setCursor(7, 1);
+      lcd.print("KEINE");
+      lcd.setCursor(5, 2);
+      lcd.print("AENDERUNG");
+    }
+    _exitedLiterProHektar = true;
+    _confirmedLiterProHektar = false;
+    delay(2000);
+  }
+}
+
+int _pulsesPerLiter = -1;
+bool _exitedPulsesPerLiter = true;
+bool _confirmedPulsesPerLiter = false;
+// *********************************************************************
+void mFunc_setPulsesPerLiter(uint8_t param)
+// *********************************************************************
+{
+  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    if (_exitedPulsesPerLiter) {
+      _pulsesPerLiter = flussMesser.getPulsesPerUnit();
+      _exitedPulsesPerLiter = false;
+      _confirmedPulsesPerLiter = false;
+    }
+    lcd.setCursor(0, 0);
+    lcd.print(F("Pulses/Liter")); // print some content on first row
+    LCDML.FUNC_setLoopInterval(100);
+  }
+
+
+  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  {
+    if (LCDML.BT_checkLeft()) {
+      LCDML.BT_resetLeft();
+      _pulsesPerLiter--;
+      if (_pulsesPerLiter < 0) {
+        _pulsesPerLiter = 0;
+      }
+    }
+    if (LCDML.BT_checkRight()) {
+      LCDML.BT_resetRight();
+      _pulsesPerLiter++;
+      if (_pulsesPerLiter > 10000) {
+        _pulsesPerLiter = 10000;
+      }
+    }
+    if (LCDML.BT_checkEnter()) {
+      _confirmedPulsesPerLiter = true;
+      LCDML.FUNC_goBackToMenu();
+    }
+    lcd.setCursor(0, 1);
+    lcd.print(_pulsesPerLiter);
+  }
+
+  if (LCDML.FUNC_close())     // ****** STABLE END *********
+  {
+    lcd.clear();
+    if (flussMesser.getPulsesPerUnit() != _pulsesPerLiter && _confirmedPulsesPerLiter) {
+      flussMesser.setPulsesPerUnit(_pulsesPerLiter);
+      lcd.setCursor(4, 0);
+      lcd.print("GESPEICHERT!");
+      lcd.setCursor(5, 1);
+      lcd.print("Neuer Wert:");
+      lcd.setCursor(8, 2);
+      lcd.print(flussMesser.getPulsesPerUnit());
+    } else {
+      lcd.setCursor(7, 1);
+      lcd.print("KEINE");
+      lcd.setCursor(5, 2);
+      lcd.print("AENDERUNG");
+    }
+    _exitedPulsesPerLiter = true;
+    _confirmedPulsesPerLiter = false;
+    delay(2000);
   }
 }
 
