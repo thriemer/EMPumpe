@@ -16,13 +16,15 @@ float PulseCounter::getValue(){
  return _value;
 }
 
-void PulseCounter::setPulsesPerUnit(unsigned int pulsesPerUnit){
+void PulseCounter::setPulsesPerUnit(int pulsesPerUnit){
    _pulsesPerUnit=pulsesPerUnit;
 }
-unsigned int PulseCounter::getPulsesPerUnit(){
+int PulseCounter::getPulsesPerUnit(){
    return _pulsesPerUnit;   
 }
-
+int* PulseCounter::getPulsesPerUnitPointer(){
+   return &_pulsesPerUnit;   
+}
 PulseCounter::PulseCounter(){
    _pulsesPerUnit=1;
    _value=0;

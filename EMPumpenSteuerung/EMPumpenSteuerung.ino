@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <LCDMenuLib2.h>
 #include <PulseCounter.h>
+#include <EEPROM.h>
 
 // *********************************************************************
 // LCDML display settings
@@ -32,6 +33,11 @@ void lcdml_menu_control();
 // *********************************************************************
 // Global variables
 // *********************************************************************
+#define EPROM_ARBEITSBREITE 0
+#define EPROM_LITER_PRO_HEKTAR 2
+#define EPROM_TRAKTOR_PULSE_PER_METER 4
+#define EPROM_FLUSSMESSER_PULSE_PER_LITER 6
+
 float arbeitsBreiten[] = {3, 5, 7, 11};
 int arbeitsBreitenIndex;
 int literProHektar;
@@ -59,18 +65,16 @@ LCDMenuLib2 LCDML(LCDML_0, _LCDML_DISP_rows, _LCDML_DISP_cols, lcdml_menu_displa
 /*--*/LCDML_add(0, LCDML_0, 1, "Parameter", NULL);
 /*--------*/LCDML_add(1, LCDML_0_1, 1, "Anzeigen", mFunc_showParameter);
 /*--------*/LCDML_add(2, LCDML_0_1, 2, "Arbeitsbreite", mFunc_setArbeitsbreite);
-/*--------*/LCDML_add(3, LCDML_0_1, 3, "L/ha", mFunc_setLiterProHektar);
+/*--------*/LCDML_add(3, LCDML_0_1, 3, "Liter/Hektar", mFunc_setLiterProHektar);
 /*--------*/LCDML_add(4, LCDML_0_1, 4, "Geschw. calibriern", NULL);
-/*--------------*/LCDML_add(5, LCDML_0_1_4, 1, "Manuell pulse/sek", NULL);
-/*--------------*/LCDML_add(6, LCDML_0_1_4, 2, "Per Messung", NULL);
-/*--------*/LCDML_add(7, LCDML_0_1, 5, "Flusssensor", NULL);
-/*--------------*/LCDML_add(8, LCDML_0_1_5, 1, "Manuell pulse/sek", mFunc_setPulsesPerLiter);
-/*--------------*/LCDML_add(9, LCDML_0_1_5, 2, "Per Messung", NULL);
-/*--*/LCDML_add(10, LCDML_0, 2, "Geschwindigkeit", mFunc_showVelocity);
+/*--------------*/LCDML_add(5, LCDML_0_1_4, 1, "Manuell pulse/sek", mFunc_setPulsesPerMeter);
+/*--------------*/LCDML_add(6, LCDML_0_1_4, 2, "Per Messung", mFunc_setPulsesPerMeterVelocity);
+/*--------*/LCDML_add(7, LCDML_0_1, 5, "Flusssensor p/s", mFunc_setPulsesPerLiter);
+/*--*/LCDML_add(8, LCDML_0, 2, "Geschwindigkeit", mFunc_showVelocity);
 
 // menu element count - last element id
 // this value must be the same as the last menu element
-#define _LCDML_DISP_cnt    10
+#define _LCDML_DISP_cnt    8
 
 // create menu
 LCDML_createMenu(_LCDML_DISP_cnt);
@@ -85,19 +89,53 @@ void traktorPulseEnd() {
 void flussMesserPulseEnd() {
   flussMesser.pulseEnded();
 }
+
+void writeIntIntoEEPROM(int address, int number)
+{
+  EEPROM.update(address, number >> 8);
+  EEPROM.update(address + 1, number & 0xFF);
+}
+
+int readIntFromEEPROM(int address)
+{
+  byte byte1 = EEPROM.read(address);
+  byte byte2 = EEPROM.read(address + 1);
+  return (byte1 << 8) + byte2;
+}
+
+void loadLastValuesFromEprom() {
+  arbeitsBreitenIndex = readIntFromEEPROM(EPROM_ARBEITSBREITE);
+  literProHektar = readIntFromEEPROM(EPROM_LITER_PRO_HEKTAR);
+  traktorGeschwindigkeit.setPulsesPerUnit(readIntFromEEPROM(EPROM_TRAKTOR_PULSE_PER_METER));
+  flussMesser.setPulsesPerUnit(readIntFromEEPROM(EPROM_FLUSSMESSER_PULSE_PER_LITER));
+}
+
 void setup()
 {
-  //TODO: load values from EEPROM
-  
+  loadLastValuesFromEprom();
   //used for measuring tractor and flow meter pulses
   attachInterrupt(digitalPinToInterrupt(2), traktorPulseEnd, FALLING);
   attachInterrupt(digitalPinToInterrupt(3), flussMesserPulseEnd, FALLING);
-  
+
   // serial init; only be needed if serial control is used
   Serial.begin(9600);                // start serial
   Serial.println(F(_LCDML_VERSION)); // only for examples
   analogWrite(10, 127);
+  Serial.print("Size of Char: ");
+  Serial.println(sizeof(char));
+  Serial.print("Size of Bool: ");
+  Serial.println(sizeof(bool));
 
+  Serial.print("Size of Int: ");
+  Serial.println(sizeof(int));
+  Serial.print("Size of Unsigned Int: ");
+  Serial.println(sizeof(unsigned int));
+  Serial.print("Size of Long: ");
+  Serial.println(sizeof(long));
+  Serial.print("Size of Float: ");
+  Serial.println(sizeof(float));
+  Serial.print("Size of Double: ");
+  Serial.println(sizeof(double));
   // LCD Begin
   lcd.init();
   lcd.backlight();

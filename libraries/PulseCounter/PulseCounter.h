@@ -6,11 +6,12 @@ public:
     PulseCounter();
     float getValue();
     void pulseEnded();
-    void setPulsesPerUnit(unsigned int pulsesPerUnit);
-    unsigned int getPulsesPerUnit();
+    void setPulsesPerUnit(int pulsesPerUnit);
+    int getPulsesPerUnit();
+    int* getPulsesPerUnitPointer();
 private:
     unsigned long _lastMeasurement;
-    unsigned int _pulsesPerUnit;
+    int _pulsesPerUnit;
     volatile unsigned int _countedPulses;
     float _value;
 };

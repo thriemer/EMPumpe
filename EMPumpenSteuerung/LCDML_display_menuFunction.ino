@@ -1,3 +1,4 @@
+#define CLEAR_ROW "                    "
 /* ===================================================================== *
  *                                                                       *
    Menu Callback Function
@@ -96,219 +97,175 @@ void mFunc_showParameter(uint8_t param)
   }
 }
 
-int _arbeitsBreitenIndex = -1;
-bool _exitedArbeitsBreite = true;
-bool _confirmedArbeitsBreite = false;
-// *********************************************************************
-void mFunc_setArbeitsbreite(uint8_t param)
-// *********************************************************************
-{
+int _localChange = -1;
+bool _exitedChangeIntVar = true;
+bool _confirmedChangeIntVar = false;
+void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int change, bool saveValue, int address, uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-    if (_exitedArbeitsBreite) {
-      _arbeitsBreitenIndex = arbeitsBreitenIndex;
-      _exitedArbeitsBreite = false;
-      _confirmedArbeitsBreite = false;
+    if (_exitedChangeIntVar) {
+      _localChange = *toChange;
+      _exitedChangeIntVar = false;
+      _confirmedChangeIntVar = false;
     }
     lcd.setCursor(0, 0);
-    lcd.print(F("Arbeitsbreite")); // print some content on first row
+    lcd.print(varName); // print some content on first row
     LCDML.FUNC_setLoopInterval(100);
   }
 
 
   if (LCDML.FUNC_loop())          // ****** LOOP *********
   {
-    if (LCDML.BT_checkLeft()) {
-      LCDML.BT_resetLeft();
-      _arbeitsBreitenIndex--;
-      if (_arbeitsBreitenIndex < 0) {
-        _arbeitsBreitenIndex = 3;
+    if (LCDML.BT_checkDown()) {
+      LCDML.BT_resetDown();
+      _localChange -= change;
+      if (_localChange < minVal) {
+        _localChange = maxVal;
       }
     }
-    if (LCDML.BT_checkRight()) {
-      LCDML.BT_resetRight();
-      _arbeitsBreitenIndex++;
-      if (_arbeitsBreitenIndex > 3) {
-        _arbeitsBreitenIndex = 0;
+    if (LCDML.BT_checkUp()) {
+      LCDML.BT_resetUp();
+      _localChange += change;
+      if (_localChange > maxVal) {
+        _localChange = minVal;
       }
     }
     if (LCDML.BT_checkEnter()) {
-      _confirmedArbeitsBreite = true;
+      _confirmedChangeIntVar = true;
       LCDML.FUNC_goBackToMenu();
     }
+    lcd.setCursor(0,1);
+    lcd.print(CLEAR_ROW);
     lcd.setCursor(0, 1);
-    lcd.print(arbeitsBreiten[_arbeitsBreitenIndex]);
+    lcd.print(_localChange);
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
   {
     lcd.clear();
-    if (arbeitsBreitenIndex != _arbeitsBreitenIndex && _confirmedArbeitsBreite) {
-      arbeitsBreitenIndex = _arbeitsBreitenIndex;
+    if (*toChange != _localChange && _confirmedChangeIntVar) {
+      *toChange = _localChange;
       lcd.setCursor(4, 0);
       lcd.print("GESPEICHERT!");
       lcd.setCursor(5, 1);
       lcd.print("Neuer Wert:");
       lcd.setCursor(8, 2);
-      lcd.print(arbeitsBreiten[_arbeitsBreitenIndex]);
+      lcd.print(*toChange);
+      if (saveValue) {
+        writeIntIntoEEPROM(address, *toChange);
+      }
     } else {
       lcd.setCursor(7, 1);
       lcd.print("KEINE");
       lcd.setCursor(5, 2);
       lcd.print("AENDERUNG");
     }
-    _exitedArbeitsBreite = true;
-    _confirmedArbeitsBreite = false;
+    _exitedChangeIntVar = true;
+    _confirmedChangeIntVar = false;
     delay(2000);
   }
 }
 
+void mFunc_setArbeitsbreite(uint8_t param) {
+  changeIntVar("Arbeitsbreite", &arbeitsBreitenIndex, 0, 3, 1,true,EPROM_ARBEITSBREITE, param);
+}
 
-int _literProHektar = -1;
-bool _exitedLiterProHektar = true;
-bool _confirmedLiterProHektar = false;
-// *********************************************************************
-void mFunc_setLiterProHektar(uint8_t param)
-// *********************************************************************
-{
+void mFunc_setLiterProHektar(uint8_t param) {
+  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 10,true,EPROM_LITER_PRO_HEKTAR, param);
+}
+
+void mFunc_setPulsesPerLiter(uint8_t param) {
+  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1,true,EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
+}
+
+void mFunc_setPulsesPerMeter(uint8_t param) {
+  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1,true,EPROM_TRAKTOR_PULSE_PER_METER, param);
+}
+
+int _savedTraktorPulse = -1;
+bool _exitedChangePulsePerMeterVelocity = true;
+bool _confirmedChangePulsePerMeterVelocity = false;
+void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
+  int minVal = 1;
+  int maxVal = 1000;
+  int change = 1;
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-    if (_exitedArbeitsBreite) {
-      _literProHektar = literProHektar;
-      _exitedLiterProHektar = false;
-      _confirmedLiterProHektar = false;
+    if (_exitedChangePulsePerMeterVelocity) {
+      _savedTraktorPulse = *traktorGeschwindigkeit.getPulsesPerUnitPointer();
+      _exitedChangePulsePerMeterVelocity = false;
+      _confirmedChangePulsePerMeterVelocity = false;
     }
     lcd.setCursor(0, 0);
-    lcd.print(F("Liter/Hektar")); // print some content on first row
+    lcd.print("Geschwindigkeit"); // print some content on first row
     LCDML.FUNC_setLoopInterval(100);
   }
 
 
   if (LCDML.FUNC_loop())          // ****** LOOP *********
   {
-    if (LCDML.BT_checkLeft()) {
-      LCDML.BT_resetLeft();
-      _literProHektar--;
-      if (_literProHektar < 10) {
-        _literProHektar = 10;
+    if (LCDML.BT_checkUp()) {
+      LCDML.BT_resetUp();
+      *traktorGeschwindigkeit.getPulsesPerUnitPointer() -= change;
+      if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() < minVal) {
+        *traktorGeschwindigkeit.getPulsesPerUnitPointer() = minVal;
       }
     }
-    if (LCDML.BT_checkRight()) {
-      LCDML.BT_resetRight();
-      _literProHektar++;
-      if (_literProHektar > 2000) {
-        _literProHektar = 2000;
+    if (LCDML.BT_checkDown()) {
+      LCDML.BT_resetDown();
+      *traktorGeschwindigkeit.getPulsesPerUnitPointer() += change;
+      if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() > maxVal) {
+        *traktorGeschwindigkeit.getPulsesPerUnitPointer() = maxVal;
       }
     }
     if (LCDML.BT_checkEnter()) {
-      _confirmedLiterProHektar = true;
+      _confirmedChangePulsePerMeterVelocity = true;
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
-    lcd.print(_literProHektar);
+    lcd.print(CLEAR_ROW);//clear row
+    lcd.setCursor(0, 1);
+    lcd.print("Pulse:");
+    lcd.setCursor(8, 1);
+    lcd.print(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
+    lcd.setCursor(0, 2);
+    lcd.print(CLEAR_ROW);//clear row
+    lcd.setCursor(0, 2);
+    lcd.print("Geschw:");
+    lcd.setCursor(8, 2);
+    lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
   {
     lcd.clear();
-    if (literProHektar != _literProHektar && _confirmedLiterProHektar) {
-      literProHektar = _literProHektar;
+    if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() != _savedTraktorPulse && _confirmedChangePulsePerMeterVelocity) {
       lcd.setCursor(4, 0);
       lcd.print("GESPEICHERT!");
       lcd.setCursor(5, 1);
       lcd.print("Neuer Wert:");
       lcd.setCursor(8, 2);
-      lcd.print(literProHektar);
+      lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
+      writeIntIntoEEPROM(EPROM_TRAKTOR_PULSE_PER_METER,*traktorGeschwindigkeit.getPulsesPerUnitPointer());
     } else {
+      *traktorGeschwindigkeit.getPulsesPerUnitPointer() = _savedTraktorPulse;
       lcd.setCursor(7, 1);
       lcd.print("KEINE");
       lcd.setCursor(5, 2);
       lcd.print("AENDERUNG");
     }
-    _exitedLiterProHektar = true;
-    _confirmedLiterProHektar = false;
+    _exitedChangePulsePerMeterVelocity = true;
+    _confirmedChangePulsePerMeterVelocity = false;
     delay(2000);
   }
+
 }
 
-int _pulsesPerLiter = -1;
-bool _exitedPulsesPerLiter = true;
-bool _confirmedPulsesPerLiter = false;
-// *********************************************************************
-void mFunc_setPulsesPerLiter(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-    if (_exitedPulsesPerLiter) {
-      _pulsesPerLiter = flussMesser.getPulsesPerUnit();
-      _exitedPulsesPerLiter = false;
-      _confirmedPulsesPerLiter = false;
-    }
-    lcd.setCursor(0, 0);
-    lcd.print(F("Pulses/Liter")); // print some content on first row
-    LCDML.FUNC_setLoopInterval(100);
-  }
-
-
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
-  {
-    if (LCDML.BT_checkLeft()) {
-      LCDML.BT_resetLeft();
-      _pulsesPerLiter--;
-      if (_pulsesPerLiter < 0) {
-        _pulsesPerLiter = 0;
-      }
-    }
-    if (LCDML.BT_checkRight()) {
-      LCDML.BT_resetRight();
-      _pulsesPerLiter++;
-      if (_pulsesPerLiter > 10000) {
-        _pulsesPerLiter = 10000;
-      }
-    }
-    if (LCDML.BT_checkEnter()) {
-      _confirmedPulsesPerLiter = true;
-      LCDML.FUNC_goBackToMenu();
-    }
-    lcd.setCursor(0, 1);
-    lcd.print(_pulsesPerLiter);
-  }
-
-  if (LCDML.FUNC_close())     // ****** STABLE END *********
-  {
-    lcd.clear();
-    if (flussMesser.getPulsesPerUnit() != _pulsesPerLiter && _confirmedPulsesPerLiter) {
-      flussMesser.setPulsesPerUnit(_pulsesPerLiter);
-      lcd.setCursor(4, 0);
-      lcd.print("GESPEICHERT!");
-      lcd.setCursor(5, 1);
-      lcd.print("Neuer Wert:");
-      lcd.setCursor(8, 2);
-      lcd.print(flussMesser.getPulsesPerUnit());
-    } else {
-      lcd.setCursor(7, 1);
-      lcd.print("KEINE");
-      lcd.setCursor(5, 2);
-      lcd.print("AENDERUNG");
-    }
-    _exitedPulsesPerLiter = true;
-    _confirmedPulsesPerLiter = false;
-    delay(2000);
-  }
-}
-
-
-// *********************************************************************
-void mFunc_showVelocity(uint8_t param)
-// *********************************************************************
-{
+void mFunc_showVelocity(uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
