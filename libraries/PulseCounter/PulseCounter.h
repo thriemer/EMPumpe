@@ -9,6 +9,8 @@ public:
     void setPulsesPerUnit(int pulsesPerUnit);
     int getPulsesPerUnit();
     int* getPulsesPerUnitPointer();
+    unsigned int getCountedPulses();
+    void resetCountedPulses();
 private:
     unsigned long _lastMeasurement;
     int _pulsesPerUnit;

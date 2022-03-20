@@ -265,6 +265,35 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
 
 }
 
+void mFunc_Verbrauch(uint8_t param) {
+  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    lcd.setCursor(1, 1);
+    lcd.print(F("Verbrauch in Liter"));
+    lcd.setCursor(6,2);
+    float liter = summierterVerbrauch/(float)flussMesser.getPulsesPerUnit();
+    lcd.print(liter);
+  }
+}
+
+
+void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
+  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    summierterVerbrauch=0;
+    writeUnsignedLongIntoEEPROM(EPROM_VERBRAUCH_GESAMMT,summierterVerbrauch);
+    lcd.setCursor(5, 1);
+    lcd.print("Verbrauch");
+    lcd.setCursor(3,2);
+    lcd.print("zurueckgesetzt");
+  }
+}
+
+
 void mFunc_showVelocity(uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
