@@ -44,7 +44,7 @@ void lcdml_menu_display()
         if (tmp->checkCondition())
         {
           // check the type off a menu element
-          if(tmp->checkType_menu() == true)
+          if (tmp->checkType_menu() == true)
           {
             // display normal content
             LCDML_getContent(content_text, tmp->getID());
@@ -53,7 +53,7 @@ void lcdml_menu_display()
           }
           else
           {
-            if(tmp->checkType_dynParam()) {
+            if (tmp->checkType_dynParam()) {
               tmp->callback(n);
             }
           }
@@ -61,12 +61,12 @@ void lcdml_menu_display()
           i++;
           n++;
         }
-      // try to go to the next sibling and check the number of displayed rows
+        // try to go to the next sibling and check the number of displayed rows
       } while (((tmp = tmp->getSibling(1)) != NULL) && (i < maxi));
     }
   }
 
-  if(LCDML.DISP_checkMenuCursorUpdate())
+  if (LCDML.DISP_checkMenuCursorUpdate())
   {
     // init vars
     uint8_t n_max             = (LCDML.MENU_getChilds() >= _LCDML_DISP_rows) ? _LCDML_DISP_rows : (LCDML.MENU_getChilds());

@@ -74,7 +74,7 @@ void mFunc_showParameter(uint8_t param)
     lcd.setCursor(0, 0);
     lcd.print(F("Arbeitsbreite:"));
     lcd.setCursor(15, 0);
-    lcd.print(arbeitsBreiten[arbeitsBreitenIndex]);
+    lcd.print(arbeitsBreite);
     lcd.setCursor(0, 1);
     lcd.print(F("L/Ha:"));
     lcd.setCursor(6, 1);
@@ -136,7 +136,7 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
       _confirmedChangeIntVar = true;
       LCDML.FUNC_goBackToMenu();
     }
-    lcd.setCursor(0,1);
+    lcd.setCursor(0, 1);
     lcd.print(CLEAR_ROW);
     lcd.setCursor(0, 1);
     lcd.print(_localChange);
@@ -169,19 +169,22 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
 }
 
 void mFunc_setArbeitsbreite(uint8_t param) {
-  changeIntVar("Arbeitsbreite", &arbeitsBreitenIndex, 0, 3, 1,true,EPROM_ARBEITSBREITE, param);
+  changeIntVar("Arbeitsbreite", &arbeitsBreite, 0, 3, 1, true, EPROM_ARBEITSBREITE, param);
 }
 
 void mFunc_setLiterProHektar(uint8_t param) {
-  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 10,true,EPROM_LITER_PRO_HEKTAR, param);
+  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 10, true, EPROM_LITER_PRO_HEKTAR, param);
 }
 
 void mFunc_setPulsesPerLiter(uint8_t param) {
-  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1,true,EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
+  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1, true, EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
 }
 
 void mFunc_setPulsesPerMeter(uint8_t param) {
-  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1,true,EPROM_TRAKTOR_PULSE_PER_METER, param);
+  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1, true, EPROM_TRAKTOR_PULSE_PER_METER, param);
+}
+void mFunc_setSimulatedSpeed(uint8_t param) {
+  changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, true, EPROM_SIMULATED_SPEED, param);
 }
 
 int _savedTraktorPulse = -1;
@@ -250,7 +253,7 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
       lcd.print("Neuer Wert:");
       lcd.setCursor(8, 2);
       lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
-      writeIntIntoEEPROM(EPROM_TRAKTOR_PULSE_PER_METER,*traktorGeschwindigkeit.getPulsesPerUnitPointer());
+      writeIntIntoEEPROM(EPROM_TRAKTOR_PULSE_PER_METER, *traktorGeschwindigkeit.getPulsesPerUnitPointer());
     } else {
       *traktorGeschwindigkeit.getPulsesPerUnitPointer() = _savedTraktorPulse;
       lcd.setCursor(7, 1);
@@ -272,9 +275,16 @@ void mFunc_Verbrauch(uint8_t param) {
     LCDML_UNUSED(param);
     lcd.setCursor(1, 1);
     lcd.print(F("Verbrauch in Liter"));
-    lcd.setCursor(6,2);
-    float liter = summierterVerbrauch/(float)flussMesser.getPulsesPerUnit();
+    lcd.setCursor(6, 2);
+    float liter = berechneVerbrauch();
     lcd.print(liter);
+  }
+  if (LCDML.FUNC_loop())
+  {
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {
+      LCDML.FUNC_goBackToMenu();  // leave this function
+    }
   }
 }
 
@@ -284,51 +294,57 @@ void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-    summierterVerbrauch=0;
-    writeUnsignedLongIntoEEPROM(EPROM_VERBRAUCH_GESAMMT,summierterVerbrauch);
+    summierterVerbrauch = 0;
+    writeUnsignedLongIntoEEPROM(EPROM_VERBRAUCH_GESAMMT, summierterVerbrauch);
     lcd.setCursor(5, 1);
     lcd.print("Verbrauch");
-    lcd.setCursor(3,2);
+    lcd.setCursor(3, 2);
     lcd.print("zurueckgesetzt");
   }
 }
 
 
-void mFunc_showVelocity(uint8_t param) {
+void mFunc_startWithRealSpeed(uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-
-    // setup function
-    // print LCD content
-    // print LCD content
-    lcd.setCursor(0, 0);
-    lcd.print(F("Geschwindigkeit "));
-    LCDML.FUNC_setLoopInterval(100);
+    useSimulatedVelocity = false;
+    lcd.clear();
+    LCDML.FUNC_setLoopInterval(1000);
   }
-
   if (LCDML.FUNC_loop())          // ****** LOOP *********
   {
-    lcd.setCursor(0, 1);
-    lcd.print(traktorGeschwindigkeit.getValue());
-    lcd.setCursor(10, 1);
-    lcd.print("m/s");
-
-    lcd.setCursor(0, 2);
-    lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
-    lcd.setCursor(10, 2);
-    lcd.print("km/h");
-
+    driveMotor();
   }
 
   if (LCDML.FUNC_close())    // ****** STABLE END *********
   {
+    analogWrite(PUMP_PWM_PIN, 0);
     // you can here reset some global vars or do nothing
   }
 }
 
+void mFunc_startWithSimulatedSpeed(uint8_t param) {
+  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    useSimulatedVelocity = true;
+    lcd.clear();
+    LCDML.FUNC_setLoopInterval(1000);
+  }
+  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  {
+    driveMotor();
+  }
 
+  if (LCDML.FUNC_close())    // ****** STABLE END *********
+  {
+    analogWrite(PUMP_PWM_PIN, 0);
+    // you can here reset some global vars or do nothing
+  }
+}
 
 // *********************************************************************
 void mFunc_screensaver(uint8_t param)

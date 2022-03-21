@@ -14,6 +14,14 @@
 #define _LCDML_DISP_cfg_cursor                     0x7E   // cursor Symbol
 #define _LCDML_DISP_cfg_scrollbar                  1      // enable a scrollbar
 
+//PINOUT
+#define TRAKTOR_PULSE_PIN 2
+#define FLOWMETER_PULSE_PIN 3
+#define PUMP_PWM_PIN 5
+#define GREEN_LED_PIN 6
+#define RED_LED_PIN 7
+//exit, enter, up, down pins are defined in LCDML_control
+
 LiquidCrystal_I2C lcd(0x20, _LCDML_DISP_cols, _LCDML_DISP_rows);
 const uint8_t scroll_bar[5][8] = {
   {B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
@@ -38,9 +46,11 @@ void lcdml_menu_control();
 #define EPROM_TRAKTOR_PULSE_PER_METER 4 //2 byte
 #define EPROM_FLUSSMESSER_PULSE_PER_LITER 6 //2 byte
 #define EPROM_VERBRAUCH_GESAMMT 8 //4 byte
+#define EPROM_SIMULATED_SPEED 12
 
-float arbeitsBreiten[] = {3, 5, 7, 11};
-int arbeitsBreitenIndex;
+bool useSimulatedVelocity = false;
+int simulatedVelocity;
+int arbeitsBreite;
 int literProHektar;
 unsigned long summierterVerbrauch;
 
@@ -75,10 +85,14 @@ LCDMenuLib2 LCDML(LCDML_0, _LCDML_DISP_rows, _LCDML_DISP_cols, lcdml_menu_displa
 /*--*/LCDML_add(8, LCDML_0, 2, "Verbrauch", NULL);
 /*--------*/LCDML_add(9, LCDML_0_2, 1, "Anzeigen", mFunc_Verbrauch);
 /*--------*/LCDML_add(10, LCDML_0_2, 2, "Zuruecksetzen", mFunc_VerbrauchZuruecksetzen);
+/*--*/LCDML_add(11, LCDML_0, 3, "Starten", mFunc_startWithRealSpeed);
+/*--*/LCDML_add(12, LCDML_0, 4, "Simulierte Geschw.", NULL);
+/*--------*/LCDML_add(13, LCDML_0_4, 1, "Geschw. anpassen", mFunc_setSimulatedSpeed);
+/*--------*/LCDML_add(14, LCDML_0_4, 2, "Starten", mFunc_startWithSimulatedSpeed);
 
 // menu element count - last element id
 // this value must be the same as the last menu element
-#define _LCDML_DISP_cnt    10
+#define _LCDML_DISP_cnt    14
 
 // create menu
 LCDML_createMenu(_LCDML_DISP_cnt);
@@ -125,24 +139,26 @@ unsigned long readUnsignedLongFromEEPROM(int address)
 }
 
 void loadLastValuesFromEprom() {
-  arbeitsBreitenIndex = readIntFromEEPROM(EPROM_ARBEITSBREITE);
+  arbeitsBreite = readIntFromEEPROM(EPROM_ARBEITSBREITE);
   literProHektar = readIntFromEEPROM(EPROM_LITER_PRO_HEKTAR);
   traktorGeschwindigkeit.setPulsesPerUnit(readIntFromEEPROM(EPROM_TRAKTOR_PULSE_PER_METER));
   flussMesser.setPulsesPerUnit(readIntFromEEPROM(EPROM_FLUSSMESSER_PULSE_PER_LITER));
   summierterVerbrauch = readUnsignedLongFromEEPROM(EPROM_VERBRAUCH_GESAMMT);
+  simulatedVelocity = readIntFromEEPROM(EPROM_SIMULATED_SPEED);
 }
 
 void setup()
 {
   loadLastValuesFromEprom();
   //used for measuring tractor and flow meter pulses
-  attachInterrupt(digitalPinToInterrupt(2), traktorPulseEnd, FALLING);
-  attachInterrupt(digitalPinToInterrupt(3), flussMesserPulseEnd, FALLING);
-
+  attachInterrupt(digitalPinToInterrupt(TRAKTOR_PULSE_PIN), traktorPulseEnd, FALLING);
+  attachInterrupt(digitalPinToInterrupt(FLOWMETER_PULSE_PIN), flussMesserPulseEnd, FALLING);
+  pinMode(PUMP_PWM_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  pinMode(RED_LED_PIN, OUTPUT);
   // serial init; only be needed if serial control is used
   Serial.begin(9600);                // start serial
   Serial.println(F(_LCDML_VERSION)); // only for examples
-  analogWrite(10, 127);
   // LCD Begin
   lcd.init();
   lcd.backlight();
@@ -161,6 +177,122 @@ void setup()
   LCDML.MENU_enRollover();
   // disable screensaver
   LCDML.SCREEN_disable();
+}
+int maxLiterPerHour = 800;
+int minControlSignal = 10;
+
+float getVelocity() {
+  if (useSimulatedVelocity) {
+    return (float)simulatedVelocity / 3.6f;
+  } else {
+    float val = traktorGeschwindigkeit.getValue();
+    traktorGeschwindigkeit.resetCountedPulses();
+    return val;
+  }
+}
+
+float calculateWantedLitersPerSecondFromVelocity(float velocityInMeterPerSecond) {
+  float literPerSquareMeter = literProHektar / 10000.0f;
+  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreite;
+}
+
+int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterPerSecond) {
+  float maxLiterPerSecond = maxLiterPerHour / ((float)60 * 60);
+  float flowInZeroToOne = neededFlowInLiterPerSecond / maxLiterPerSecond;
+  int controlSignal = (int)(flowInZeroToOne * 255);
+  if (controlSignal < minControlSignal) {
+    controlSignal = minControlSignal;
+    //you could also signal drive faster here
+  }
+  if (controlSignal > 255) {
+    controlSignal = 255;
+    //something is possibly go wrong. Turn lamp on?
+  }
+  return controlSignal;
+}
+//den Verbrauch nur aller zwei Minuten speichern, weil der EEPROM nur 100.000 geschrieben werden kann
+//angenommen der Arduino wird 60 Tage im Jahr, acht Stunden am Tag benutzt. Wenn man aller zwei Minuten speichert, dann hält diese Adresse ~7 Jahre
+long nextmillisSavedVerbrauch = 0;
+void addVerbrauch() {
+  long now = millis();
+  summierterVerbrauch += flussMesser.getCountedPulses();
+  if (now >= nextmillisSavedVerbrauch) {
+    writeUnsignedLongIntoEEPROM(EPROM_VERBRAUCH_GESAMMT, summierterVerbrauch);
+    nextmillisSavedVerbrauch = now + 2L * 60L * 1000L;
+  }
+}
+
+float readFlowSensor() {
+  addVerbrauch();
+  float actualLitersPerSecond = flussMesser.getValue();
+  flussMesser.resetCountedPulses();
+  return actualLitersPerSecond;
+}
+
+const float MAX_ALLOWED_DEVIATION = 0.1f;
+int deviateMoreThanCount = 0;
+bool isRepeatedDeviating(float actualFlow, float wantedFlow) {
+  bool error = false;
+  float deviation = 0;
+  float sum = wantedFlow + actualFlow;
+  if (sum > 0.001f) {
+    deviation = abs(wantedFlow - actualFlow) / (sum / 2.0f);
+  }
+  if (deviation > MAX_ALLOWED_DEVIATION) {
+    deviateMoreThanCount++;
+  } else {
+    deviateMoreThanCount = 0;
+  }
+  if (deviateMoreThanCount > 10) {
+    error = true;
+  }
+  return error;
+}
+
+bool isHeckKraftheberUnten() {
+  //TODO: fill this function
+  return true;
+}
+
+void turnGreenLedOn() {
+  digitalWrite(GREEN_LED_PIN, HIGH);
+  digitalWrite(RED_LED_PIN, LOW);
+}
+
+void turnRedLedOn() {
+  digitalWrite(GREEN_LED_PIN, LOW);
+  digitalWrite(RED_LED_PIN, HIGH);
+}
+
+float berechneVerbrauch() {
+  return summierterVerbrauch / (float)flussMesser.getPulsesPerUnit();
+}
+
+void driveMotor() {
+  float velocity = getVelocity();
+  float wantedFlow = calculateWantedLitersPerSecondFromVelocity(velocity);
+  float actualFlow = readFlowSensor();
+  bool flowSensorRepeatingError = isRepeatedDeviating(actualFlow, wantedFlow);
+  int pumpControlSignal = calculatePumpControlSignalFromWantedLitersPerSecond(wantedFlow);
+  if (!flowSensorRepeatingError && isHeckKraftheberUnten) {
+    analogWrite(PUMP_PWM_PIN, pumpControlSignal);
+    turnGreenLedOn();
+  } else {
+    analogWrite(PUMP_PWM_PIN, 0);
+    turnRedLedOn();
+  }
+  lcd.setCursor(0, 0);
+  lcd.print(useSimulatedVelocity ? "Simul. Geschw" : "Gemessene Geschw");
+  lcd.print(velocity * 3.6f);
+  lcd.setCursor(0, 1);
+  lcd.print("Verbrauch: ");
+  lcd.print(berechneVerbrauch());
+  lcd.setCursor(0, 2);
+  lcd.print("Gewollte  L/s: ");
+  lcd.print(wantedFlow);
+  lcd.setCursor(0, 3);
+  lcd.print("Gemessene L/s: ");
+  lcd.print(actualFlow);
 }
 
 void loop()
