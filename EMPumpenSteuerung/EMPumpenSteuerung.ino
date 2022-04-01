@@ -18,11 +18,12 @@
 #define TRAKTOR_PULSE_PIN 2
 #define FLOWMETER_PULSE_PIN 3
 #define PUMP_PWM_PIN 5
+#define WHITE_LED_PIN 4
 #define GREEN_LED_PIN 6
 #define RED_LED_PIN 7
 //exit, enter, up, down pins are defined in LCDML_control
 
-LiquidCrystal_I2C lcd(0x20, _LCDML_DISP_cols, _LCDML_DISP_rows);
+LiquidCrystal_I2C lcd(0x20/*0x27*/, _LCDML_DISP_cols, _LCDML_DISP_rows);
 const uint8_t scroll_bar[5][8] = {
   {B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
   {B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1
@@ -50,7 +51,7 @@ void lcdml_menu_control();
 
 bool useSimulatedVelocity = false;
 int simulatedVelocity;
-int arbeitsBreite;
+int arbeitsBreiteInDezimeter;
 int literProHektar;
 unsigned long summierterVerbrauch;
 
@@ -139,7 +140,7 @@ unsigned long readUnsignedLongFromEEPROM(int address)
 }
 
 void loadLastValuesFromEprom() {
-  arbeitsBreite = readIntFromEEPROM(EPROM_ARBEITSBREITE);
+  arbeitsBreiteInDezimeter = readIntFromEEPROM(EPROM_ARBEITSBREITE);
   literProHektar = readIntFromEEPROM(EPROM_LITER_PRO_HEKTAR);
   traktorGeschwindigkeit.setPulsesPerUnit(readIntFromEEPROM(EPROM_TRAKTOR_PULSE_PER_METER));
   flussMesser.setPulsesPerUnit(readIntFromEEPROM(EPROM_FLUSSMESSER_PULSE_PER_LITER));
@@ -154,8 +155,10 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(TRAKTOR_PULSE_PIN), traktorPulseEnd, FALLING);
   attachInterrupt(digitalPinToInterrupt(FLOWMETER_PULSE_PIN), flussMesserPulseEnd, FALLING);
   pinMode(PUMP_PWM_PIN, OUTPUT);
+  pinMode(WHITE_LED_PIN, OUTPUT);
   pinMode(GREEN_LED_PIN, OUTPUT);
   pinMode(RED_LED_PIN, OUTPUT);
+  analogWrite(6,64);
   // serial init; only be needed if serial control is used
   Serial.begin(9600);                // start serial
   Serial.println(F(_LCDML_VERSION)); // only for examples
@@ -186,14 +189,13 @@ float getVelocity() {
     return (float)simulatedVelocity / 3.6f;
   } else {
     float val = traktorGeschwindigkeit.getValue();
-    traktorGeschwindigkeit.resetCountedPulses();
     return val;
   }
 }
 
 float calculateWantedLitersPerSecondFromVelocity(float velocityInMeterPerSecond) {
   float literPerSquareMeter = literProHektar / 10000.0f;
-  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreite;
+  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreiteInDezimeter/10.0f;
 }
 
 int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterPerSecond) {
@@ -201,7 +203,7 @@ int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterP
   float flowInZeroToOne = neededFlowInLiterPerSecond / maxLiterPerSecond;
   int controlSignal = (int)(flowInZeroToOne * 255);
   if (controlSignal < minControlSignal) {
-    controlSignal = minControlSignal;
+    controlSignal = 0;
     //you could also signal drive faster here
   }
   if (controlSignal > 255) {
@@ -225,7 +227,6 @@ void addVerbrauch() {
 float readFlowSensor() {
   addVerbrauch();
   float actualLitersPerSecond = flussMesser.getValue();
-  flussMesser.resetCountedPulses();
   return actualLitersPerSecond;
 }
 
@@ -249,18 +250,33 @@ bool isRepeatedDeviating(float actualFlow, float wantedFlow) {
   return error;
 }
 
+void resetErrorState() {
+  deviateMoreThanCount = 0;
+  digitalWrite(RED_LED_PIN, LOW);
+}
+
 bool isHeckKraftheberUnten() {
   //TODO: fill this function
   return true;
 }
 
-void turnGreenLedOn() {
+void turnPumpLedOn() {
   digitalWrite(GREEN_LED_PIN, HIGH);
-  digitalWrite(RED_LED_PIN, LOW);
+}
+void turnPumpLedOff() {
+  digitalWrite(GREEN_LED_PIN, LOW);
+}
+
+void turnSystemReadyLedOn() {
+  digitalWrite(WHITE_LED_PIN, HIGH);
+}
+void turnSystemReadyLedOff() {
+  digitalWrite(WHITE_LED_PIN, LOW);
 }
 
 void turnRedLedOn() {
   digitalWrite(GREEN_LED_PIN, LOW);
+  digitalWrite(WHITE_LED_PIN, LOW);
   digitalWrite(RED_LED_PIN, HIGH);
 }
 
@@ -276,7 +292,13 @@ void driveMotor() {
   int pumpControlSignal = calculatePumpControlSignalFromWantedLitersPerSecond(wantedFlow);
   if (!flowSensorRepeatingError && isHeckKraftheberUnten) {
     analogWrite(PUMP_PWM_PIN, pumpControlSignal);
-    turnGreenLedOn();
+    turnSystemReadyLedOn();
+    Serial.println(pumpControlSignal);
+    if (pumpControlSignal > 0) {
+      turnPumpLedOn();
+    } else {
+      turnPumpLedOff();
+    }
   } else {
     analogWrite(PUMP_PWM_PIN, 0);
     turnRedLedOn();

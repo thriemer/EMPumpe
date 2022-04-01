@@ -7,11 +7,9 @@ void PulseCounter::pulseEnded(){
 float PulseCounter::getValue(){
     unsigned long time = millis();
     unsigned long delta = time-_lastMeasurement;
-    if(delta>1000){
-        _value = float(_countedPulses)/float(_pulsesPerUnit)/float(delta)*1000.0f;
-        _lastMeasurement=time;
-    }
-
+    _value = ((float(_countedPulses)/float(_pulsesPerUnit))/float(delta))*1000.0f;
+    _lastMeasurement=time;
+    _countedPulses=0;
  return _value;
 }
 
@@ -27,10 +25,6 @@ int* PulseCounter::getPulsesPerUnitPointer(){
 
 unsigned int PulseCounter::getCountedPulses(){
     return _countedPulses;
-}
-
-void PulseCounter::resetCountedPulses(){
-   _countedPulses=0;
 }
 
 PulseCounter::PulseCounter(){

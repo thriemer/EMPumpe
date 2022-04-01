@@ -1,66 +1,4 @@
-#define CLEAR_ROW "                    "
-/* ===================================================================== *
- *                                                                       *
-   Menu Callback Function
- *                                                                       *
-   =====================================================================
-
-   EXAMPLE CODE:
-
-  // *********************************************************************
-  void your_function_name(uint8_t param)
-  // *********************************************************************
-  {
-  if(LCDML.FUNC_setup())          // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    //LCDML_UNUSED(param);
-    // setup
-    // is called only if it is started
-
-    // starts a trigger event for the loop function every 100 milliseconds
-    LCDML.FUNC_setLoopInterval(100);
-
-    // uncomment this line when the menu should go back to the last called position
-    // this could be a cursor position or the an active menu function
-    // GBA means => go back advanced
-    //LCDML.FUNC_setGBA()
-
-    //
-  }
-
-  if(LCDML.FUNC_loop())           // ****** LOOP *********
-  {
-    // loop
-    // is called when it is triggered
-    // - with LCDML_DISP_triggerMenu( milliseconds )
-    // - with every button or event status change
-
-    // uncomment this line when the screensaver should not be called when this function is running
-    // reset screensaver timer
-    //LCDML.SCREEN_resetTimer();
-
-    // check if any button is pressed (enter, up, down, left, right)
-    if(LCDML.BT_checkAny()) {
-      LCDML.FUNC_goBackToMenu();
-    }
-  }
-
-  if(LCDML.FUNC_close())      // ****** STABLE END *********
-  {
-    // loop end
-    // you can here reset some global vars or delete it
-    // this function is always called when the functions ends.
-    // this means when you are calling a jumpTo ore a goRoot function
-    // that this part is called before a function is closed
-  }
-  }
-
-
-   =====================================================================
-*/
-
-
+#define READ_DELAY 2000
 // *********************************************************************
 void mFunc_showParameter(uint8_t param)
 // *********************************************************************
@@ -74,7 +12,7 @@ void mFunc_showParameter(uint8_t param)
     lcd.setCursor(0, 0);
     lcd.print(F("Arbeitsbreite:"));
     lcd.setCursor(15, 0);
-    lcd.print(arbeitsBreite);
+    lcd.print(arbeitsBreiteInDezimeter / 10.0f);
     lcd.setCursor(0, 1);
     lcd.print(F("L/Ha:"));
     lcd.setCursor(6, 1);
@@ -97,10 +35,18 @@ void mFunc_showParameter(uint8_t param)
   }
 }
 
+String appendSpace(String s) {
+  int toAppend = 20 - s.length();
+  for (int i = 0; i < toAppend; i++) {
+    s += " ";
+  }
+  return s;
+}
+
 int _localChange = -1;
 bool _exitedChangeIntVar = true;
 bool _confirmedChangeIntVar = false;
-void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int change, bool saveValue, int address, uint8_t param) {
+void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int change, float multiplier, int address, uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
@@ -137,9 +83,8 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
-    lcd.print(CLEAR_ROW);
-    lcd.setCursor(0, 1);
-    lcd.print(_localChange);
+    String varToDisplay = String(_localChange * multiplier);
+    lcd.print(appendSpace(varToDisplay));
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
@@ -152,10 +97,8 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
       lcd.setCursor(5, 1);
       lcd.print("Neuer Wert:");
       lcd.setCursor(8, 2);
-      lcd.print(*toChange);
-      if (saveValue) {
-        writeIntIntoEEPROM(address, *toChange);
-      }
+      lcd.print(*toChange * multiplier);
+      writeIntIntoEEPROM(address, *toChange);
     } else {
       lcd.setCursor(7, 1);
       lcd.print("KEINE");
@@ -164,27 +107,27 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
     }
     _exitedChangeIntVar = true;
     _confirmedChangeIntVar = false;
-    delay(2000);
+    delay(READ_DELAY);
   }
 }
 
 void mFunc_setArbeitsbreite(uint8_t param) {
-  changeIntVar("Arbeitsbreite", &arbeitsBreite, 0, 3, 1, true, EPROM_ARBEITSBREITE, param);
+  changeIntVar("Arbeitsbreite", &arbeitsBreiteInDezimeter, 0, 240, 1, 0.1f, EPROM_ARBEITSBREITE, param);
 }
 
 void mFunc_setLiterProHektar(uint8_t param) {
-  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 10, true, EPROM_LITER_PRO_HEKTAR, param);
+  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 1, 1, EPROM_LITER_PRO_HEKTAR, param);
 }
 
 void mFunc_setPulsesPerLiter(uint8_t param) {
-  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1, true, EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
+  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1, 1, EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
 }
 
 void mFunc_setPulsesPerMeter(uint8_t param) {
-  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1, true, EPROM_TRAKTOR_PULSE_PER_METER, param);
+  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1, 1, EPROM_TRAKTOR_PULSE_PER_METER, param);
 }
 void mFunc_setSimulatedSpeed(uint8_t param) {
-  changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, true, EPROM_SIMULATED_SPEED, param);
+  changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, 1, EPROM_SIMULATED_SPEED, param);
 }
 
 int _savedTraktorPulse = -1;
@@ -230,17 +173,12 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
-    lcd.print(CLEAR_ROW);//clear row
-    lcd.setCursor(0, 1);
-    lcd.print("Pulse:");
+    String ppu = String(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
+    lcd.print(appendSpace(String("Pulse: ") + ppu));
     lcd.setCursor(8, 1);
-    lcd.print(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
     lcd.setCursor(0, 2);
-    lcd.print(CLEAR_ROW);//clear row
-    lcd.setCursor(0, 2);
-    lcd.print("Geschw:");
-    lcd.setCursor(8, 2);
-    lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
+    String vel = String(traktorGeschwindigkeit.getValue() * 3.6f);
+    lcd.print(appendSpace(String("Geschw: ") + vel));
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
@@ -263,7 +201,7 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
     }
     _exitedChangePulsePerMeterVelocity = true;
     _confirmedChangePulsePerMeterVelocity = false;
-    delay(2000);
+    delay(READ_DELAY);
   }
 
 }
@@ -288,11 +226,12 @@ void mFunc_Verbrauch(uint8_t param) {
   }
 }
 
-
+long startedMillis = 0;
 void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
+    startedMillis = millis();
     LCDML_UNUSED(param);
     summierterVerbrauch = 0;
     writeUnsignedLongIntoEEPROM(EPROM_VERBRAUCH_GESAMMT, summierterVerbrauch);
@@ -300,16 +239,17 @@ void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
     lcd.print("Verbrauch");
     lcd.setCursor(3, 2);
     lcd.print("zurueckgesetzt");
+    delay(READ_DELAY);
+    LCDML.FUNC_goBackToMenu();
   }
 }
 
-
-void mFunc_startWithRealSpeed(uint8_t param) {
+void driverMenu(uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
-    useSimulatedVelocity = false;
+    resetErrorState();
     lcd.clear();
     LCDML.FUNC_setLoopInterval(1000);
   }
@@ -321,106 +261,18 @@ void mFunc_startWithRealSpeed(uint8_t param) {
   if (LCDML.FUNC_close())    // ****** STABLE END *********
   {
     analogWrite(PUMP_PWM_PIN, 0);
+    turnPumpLedOff();
+    turnSystemReadyLedOff();
     // you can here reset some global vars or do nothing
   }
+}
+
+void mFunc_startWithRealSpeed(uint8_t param) {
+  useSimulatedVelocity = false;
+  driverMenu(param);
 }
 
 void mFunc_startWithSimulatedSpeed(uint8_t param) {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-    useSimulatedVelocity = true;
-    lcd.clear();
-    LCDML.FUNC_setLoopInterval(1000);
-  }
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
-  {
-    driveMotor();
-  }
-
-  if (LCDML.FUNC_close())    // ****** STABLE END *********
-  {
-    analogWrite(PUMP_PWM_PIN, 0);
-    // you can here reset some global vars or do nothing
-  }
-}
-
-// *********************************************************************
-void mFunc_screensaver(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-
-    // update LCD content
-    lcd.setCursor(0, 0); // set cursor
-    lcd.print(F("screensaver")); // print change content
-    lcd.setCursor(0, 1); // set cursor
-    lcd.print(F("press any key"));
-    lcd.setCursor(0, 2); // set cursor
-    lcd.print(F("to leave it"));
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 milliseconds
-  }
-
-  if (LCDML.FUNC_loop())
-  {
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {
-      LCDML.FUNC_goBackToMenu();  // leave this function
-    }
-  }
-
-  if (LCDML.FUNC_close())
-  {
-    // The screensaver go to the root menu
-    LCDML.MENU_goRoot();
-  }
-}
-
-
-
-// *********************************************************************
-void mFunc_back(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-
-    // end function and go an layer back
-    LCDML.FUNC_goBackToMenu(1);      // leave this function and go a layer back
-  }
-}
-
-
-// *********************************************************************
-void mFunc_goToRootMenu(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-
-    // go to root and display menu
-    LCDML.MENU_goRoot();
-  }
-}
-
-
-// *********************************************************************
-void mFunc_jumpTo_timer_info(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-
-    // Jump to main screen
-  }
+  useSimulatedVelocity = true;
+  driverMenu(param);
 }
