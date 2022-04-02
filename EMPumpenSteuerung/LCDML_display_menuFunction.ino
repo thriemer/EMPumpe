@@ -129,7 +129,9 @@ void mFunc_setPulsesPerMeter(uint8_t param) {
 void mFunc_setSimulatedSpeed(uint8_t param) {
   changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, 1, EPROM_SIMULATED_SPEED, param);
 }
-
+void mFunc_setMaxLiterPerHour(uint8_t param) {
+  changeIntVar("Pumpe max L/h", &maxLiterPerHour, 1, 2000, 1, 1, EPROM_MAX_LITER_PER_HOUR, param);
+}
 int _savedTraktorPulse = -1;
 bool _exitedChangePulsePerMeterVelocity = true;
 bool _confirmedChangePulsePerMeterVelocity = false;
