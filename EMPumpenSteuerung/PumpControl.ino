@@ -1,5 +1,5 @@
 int minControlSignal = 10;
-
+#define HEKTAR_AREA 10000.0d
 float getVelocity() {
   if (useSimulatedVelocity) {
     return (float)simulatedVelocity / 3.6f;
@@ -9,9 +9,9 @@ float getVelocity() {
   }
 }
 
-float calculateWantedLitersPerSecondFromVelocity(float velocityInMeterPerSecond) {
-  float literPerSquareMeter = literProHektar / 10000.0f;
-  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreiteInDezimeter/10.0f;
+double calculateWantedLitersPerSecondFromVelocity(float velocityInMeterPerSecond) {
+  double literPerSquareMeter = literProHektar / HEKTAR_AREA;
+  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreiteInDezimeter/10.0d;
 }
 
 int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterPerSecond) {
@@ -22,6 +22,7 @@ int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterP
     controlSignal = 0;
     //you could also signal drive faster here
   }
+  moreFlowThanPossible = controlSignal > 255;
   if (controlSignal > 255) {
     controlSignal = 255;
     //something is possibly go wrong. Turn lamp on?
@@ -46,28 +47,24 @@ float readFlowSensor() {
   return actualLitersPerSecond;
 }
 
-const float MAX_ALLOWED_DEVIATION = 0.1f;
+const float MAX_ALLOWED_DEVIATION = 0.2f;
 int deviateMoreThanCount = 0;
 bool isRepeatedDeviating(float actualFlow, float wantedFlow) {
-  bool error = false;
   float deviation = 0;
-  float sum = wantedFlow + actualFlow;
-  if (sum > 0.001f) {
-    deviation = abs(wantedFlow - actualFlow) / (sum / 2.0f);
+  if (wantedFlow > 0.01f) {
+    deviation = abs(wantedFlow - actualFlow) / wantedFlow;
   }
   if (deviation > MAX_ALLOWED_DEVIATION) {
     deviateMoreThanCount++;
   } else {
     deviateMoreThanCount = 0;
   }
-  if (deviateMoreThanCount > 10) {
-    error = true;
-  }
-  return error;
+  return deviateMoreThanCount >= 5;
 }
 
 void resetErrorState() {
   deviateMoreThanCount = 0;
+  repeatedDeviating = false;
   digitalWrite(RED_LED_PIN, LOW);
 }
 
@@ -91,22 +88,26 @@ void turnSystemReadyLedOff() {
 }
 
 void turnRedLedOn() {
-  digitalWrite(GREEN_LED_PIN, LOW);
-  digitalWrite(WHITE_LED_PIN, LOW);
   digitalWrite(RED_LED_PIN, HIGH);
 }
+void turnRedLedOff() {
+  digitalWrite(RED_LED_PIN, LOW);
+}
+
 
 float berechneVerbrauch() {
   return summierterVerbrauch / (float)flussMesser.getPulsesPerUnit();
 }
 
+char verbrauchBuffer[6];
 void driveMotor() {
   float velocity = getVelocity();
-  float wantedFlow = calculateWantedLitersPerSecondFromVelocity(velocity);
-  float actualFlow = readFlowSensor();
-  bool flowSensorRepeatingError = isRepeatedDeviating(actualFlow, wantedFlow);
+  pumpSetPoint = calculateWantedLitersPerSecondFromVelocity(velocity);
+  flowSensorReading = readFlowSensor();
+  pumpPID.Compute();
+  float wantedFlow = (float) pumpControl;
   int pumpControlSignal = calculatePumpControlSignalFromWantedLitersPerSecond(wantedFlow);
-  if (!flowSensorRepeatingError && isHeckKraftheberUnten) {
+  if (isHeckKraftheberUnten) {
     analogWrite(PUMP_PWM_PIN, pumpControlSignal);
     turnSystemReadyLedOn();
     if (pumpControlSignal > 0) {
@@ -114,20 +115,27 @@ void driveMotor() {
     } else {
       turnPumpLedOff();
     }
-  } else {
-    analogWrite(PUMP_PWM_PIN, 0);
-    turnRedLedOn();
   }
+  repeatedDeviating = isRepeatedDeviating(flowSensorReading, wantedFlow);
   lcd.setCursor(0, 0);
-  lcd.print(useSimulatedVelocity ? "Simul. Geschw" : "Gemessene Geschw");
   lcd.print(velocity * 3.6f);
+  lcd.print(" Km/h");
+  lcd.setCursor(12, 0);
+  snprintf(verbrauchBuffer , sizeof verbrauchBuffer, "%04d", (int)berechneVerbrauch());
+  lcd.print(verbrauchBuffer);
+  lcd.print(" L");
   lcd.setCursor(0, 1);
-  lcd.print("Verbrauch: ");
-  lcd.print(berechneVerbrauch());
+  lcd.print("Soll: ");
+  lcd.print(pumpSetPoint*60);
+  lcd.print(" L/min");
   lcd.setCursor(0, 2);
-  lcd.print("Gewollte  L/s: ");
-  lcd.print(wantedFlow);
+  lcd.print("Ist : ");
+  lcd.print(flowSensorReading*60);
+  lcd.print(" L/min");
   lcd.setCursor(0, 3);
-  lcd.print("Gemessene L/s: ");
-  lcd.print(actualFlow);
+  lcd.print("Ist : ");
+  double timeForOneHektar = velocity > 0.01 ? HEKTAR_AREA / (arbeitsBreiteInDezimeter/10.0d * velocity) : 1000;
+  lcd.print(flowSensorReading*timeForOneHektar);
+  lcd.print(" L/min");
+  
 }

@@ -262,11 +262,19 @@ void driverMenu(uint8_t param) {
 
   if (LCDML.FUNC_close())    // ****** STABLE END *********
   {
+    resetErrorState();
     analogWrite(PUMP_PWM_PIN, 0);
     turnPumpLedOff();
     turnSystemReadyLedOff();
-    // you can here reset some global vars or do nothing
+    resetPIDController();
   }
+}
+
+void resetPIDController(){
+  pumpSetPoint=0;
+  flowSensorReading=0;
+  pumpControl=0;
+  pumpPID.reset();
 }
 
 void mFunc_startWithRealSpeed(uint8_t param) {

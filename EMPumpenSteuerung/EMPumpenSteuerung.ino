@@ -3,6 +3,7 @@
 #include <LCDMenuLib2.h>
 #include <PulseCounter.h>
 #include <EEPROM.h>
+#include <PID_v1.h>
 
 // *********************************************************************
 // LCDML display settings
@@ -23,7 +24,7 @@
 #define RED_LED_PIN 7
 //exit, enter, up, down pins are defined in LCDML_control
 
-LiquidCrystal_I2C lcd(0x20/*0x27*/, _LCDML_DISP_cols, _LCDML_DISP_rows);
+LiquidCrystal_I2C lcd(0x27/*0x27*/, _LCDML_DISP_cols, _LCDML_DISP_rows);
 const uint8_t scroll_bar[5][8] = {
   {B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
   {B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1
@@ -52,6 +53,11 @@ unsigned long summierterVerbrauch;
 
 PulseCounter traktorGeschwindigkeit;
 PulseCounter flussMesser;
+double pumpSetPoint, flowSensorReading, pumpControl;
+PID pumpPID(&flowSensorReading, &pumpControl, &pumpSetPoint, 0.1, 1, 0.1, DIRECT);
+
+
+bool repeatedDeviating, moreFlowThanPossible;
 
 // *********************************************************************
 // Objects
@@ -115,6 +121,8 @@ void setup()
   pinMode(WHITE_LED_PIN, OUTPUT);
   pinMode(GREEN_LED_PIN, OUTPUT);
   pinMode(RED_LED_PIN, OUTPUT);
+  pumpPID.SetMode(AUTOMATIC);
+  pumpPID.SetSampleTime(990);
   // serial init; only be needed if serial control is used
   Serial.begin(9600);                // start serial
   // LCD Begin
@@ -139,5 +147,6 @@ void setup()
 
 void loop()
 {
+  controlRedLED();
   LCDML.loop();
 }
