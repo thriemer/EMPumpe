@@ -4,7 +4,10 @@
 #define EPROM_FLUSSMESSER_PULSE_PER_LITER 6 //2 byte
 #define EPROM_VERBRAUCH_GESAMMT 8 //4 byte
 #define EPROM_SIMULATED_SPEED 12 //2 byte
-#define EPROM_MAX_LITER_PER_HOUR 14
+#define EPROM_MAX_LITER_PER_HOUR 14 //2 byte
+#define EPROM_PID_PROPORTIONAL 16 //2 byte
+#define EPROM_PID_INTEGRAL 18 //2 byte
+#define EPROM_PID_DERIVATIVE 20 //2 byte
 
 void writeIntIntoEEPROM(int address, int number)
 {
@@ -44,4 +47,9 @@ void loadLastValuesFromEprom() {
   summierterVerbrauch = readUnsignedLongFromEEPROM(EPROM_VERBRAUCH_GESAMMT);
   simulatedVelocity = readIntFromEEPROM(EPROM_SIMULATED_SPEED);
   maxLiterPerHour = readIntFromEEPROM(EPROM_MAX_LITER_PER_HOUR);
+  pidProportional = readIntFromEEPROM(EPROM_PID_PROPORTIONAL);
+  pidIntegral = readIntFromEEPROM(EPROM_PID_INTEGRAL);
+  pidDerivative = readIntFromEEPROM(EPROM_PID_DERIVATIVE);
+  setPIDValues();
+  Serial.println(pumpPID.GetKp());
 }

@@ -35,18 +35,10 @@ void mFunc_showParameter(uint8_t param)
   }
 }
 
-String appendSpace(String s) {
-  int toAppend = 20 - s.length();
-  for (int i = 0; i < toAppend; i++) {
-    s += " ";
-  }
-  return s;
-}
-
 int _localChange = -1;
 bool _exitedChangeIntVar = true;
 bool _confirmedChangeIntVar = false;
-void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int change, float multiplier, int address, uint8_t param) {
+void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int change, float multiplier, int address, uint8_t param) {
   if (LCDML.FUNC_setup())         // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
@@ -83,8 +75,7 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
-    String varToDisplay = String(_localChange * multiplier);
-    lcd.print(appendSpace(varToDisplay));
+    lcd.print(_localChange * multiplier);
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********
@@ -93,17 +84,17 @@ void changeIntVar(String varName, int* toChange, int minVal, int maxVal, int cha
     if (*toChange != _localChange && _confirmedChangeIntVar) {
       *toChange = _localChange;
       lcd.setCursor(4, 0);
-      lcd.print("GESPEICHERT!");
+      lcd.print(F("GESPEICHERT!"));
       lcd.setCursor(5, 1);
-      lcd.print("Neuer Wert:");
+      lcd.print(F("Neuer Wert:"));
       lcd.setCursor(8, 2);
       lcd.print(*toChange * multiplier);
       writeIntIntoEEPROM(address, *toChange);
     } else {
       lcd.setCursor(7, 1);
-      lcd.print("KEINE");
+      lcd.print(F("KEINE"));
       lcd.setCursor(5, 2);
-      lcd.print("AENDERUNG");
+      lcd.print(F("AENDERUNG"));
     }
     _exitedChangeIntVar = true;
     _confirmedChangeIntVar = false;
@@ -131,7 +122,24 @@ void mFunc_setSimulatedSpeed(uint8_t param) {
 }
 void mFunc_setMaxLiterPerHour(uint8_t param) {
   changeIntVar("Pumpe max L/h", &maxLiterPerHour, 1, 2000, 1, 1, EPROM_MAX_LITER_PER_HOUR, param);
+  setPIDValues();
 }
+
+void mFunc_setPIDProportional(uint8_t param) {
+  changeIntVar("PID Proportional", &pidProportional, 0, 100, 1, 0.1f, EPROM_PID_PROPORTIONAL, param);
+  setPIDValues();
+}
+
+void mFunc_setPIDIntegral(uint8_t param) {
+  changeIntVar("PID Integral", &pidIntegral, 0, 100, 1, 0.1f, EPROM_PID_INTEGRAL, param);
+  setPIDValues();
+}
+
+void mFunc_setPIDDerivative(uint8_t param) {
+  changeIntVar("PID Ableitung", &pidDerivative, 0, 100, 1, 0.1f, EPROM_PID_DERIVATIVE, param);
+  setPIDValues();
+}
+
 int _savedTraktorPulse = -1;
 bool _exitedChangePulsePerMeterVelocity = true;
 bool _confirmedChangePulsePerMeterVelocity = false;
@@ -175,12 +183,12 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
       LCDML.FUNC_goBackToMenu();
     }
     lcd.setCursor(0, 1);
-    String ppu = String(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
-    lcd.print(appendSpace(String("Pulse: ") + ppu));
+    lcd.print(F("Pulse: "));
+    lcd.print(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
     lcd.setCursor(8, 1);
     lcd.setCursor(0, 2);
-    String vel = String(traktorGeschwindigkeit.getValue() * 3.6f);
-    lcd.print(appendSpace(String("Geschw: ") + vel));
+    lcd.print(F("Geschw: "));
+    lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
   }
 
   if (LCDML.FUNC_close())     // ****** STABLE END *********

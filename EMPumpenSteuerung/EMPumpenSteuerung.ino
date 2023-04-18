@@ -50,12 +50,19 @@ int maxLiterPerHour;
 int arbeitsBreiteInDezimeter;
 int literProHektar;
 unsigned long summierterVerbrauch;
+int pidProportional;
+int pidIntegral;
+int pidDerivative;
 
 PulseCounter traktorGeschwindigkeit;
 PulseCounter flussMesser;
 double pumpSetPoint, flowSensorReading, pumpControl;
 PID pumpPID(&flowSensorReading, &pumpControl, &pumpSetPoint, 0.1, 1, 0.1, DIRECT);
 
+void setPIDValues(){
+    pumpPID.SetTunings(pidProportional/10.0, pidIntegral/10.0, pidDerivative/10.0);
+    pumpPID.SetOutputLimits(0, maxLiterPerHour/(60 * 60.0d));
+}
 
 bool repeatedDeviating, moreFlowThanPossible;
 
@@ -81,21 +88,25 @@ LCDMenuLib2 LCDML(LCDML_0, _LCDML_DISP_rows, _LCDML_DISP_cols, lcdml_menu_displa
 /*--------*/LCDML_add(2, LCDML_0_1, 2, "Arbeitsbreite", mFunc_setArbeitsbreite);
 /*--------*/LCDML_add(3, LCDML_0_1, 3, "Liter/Hektar", mFunc_setLiterProHektar);
 /*--------*/LCDML_add(4, LCDML_0_1, 4, "Geschw. calibriern", NULL);
-/*--------------*/LCDML_add(6, LCDML_0_1_4, 1, "Manuell pulse/sek", mFunc_setPulsesPerMeter);
-/*--------------*/LCDML_add(7, LCDML_0_1_4, 2, "Per Messung", mFunc_setPulsesPerMeterVelocity);
-/*--------*/LCDML_add(8, LCDML_0_1, 5, "Flusssensor p/s", mFunc_setPulsesPerLiter);
-/*--------*/LCDML_add(5, LCDML_0_1, 6, "Pumpe max L/h", mFunc_setMaxLiterPerHour);
-/*--*/LCDML_add(9, LCDML_0, 2, "Verbrauch", NULL);
-/*--------*/LCDML_add(10, LCDML_0_2, 1, "Anzeigen", mFunc_Verbrauch);
-/*--------*/LCDML_add(11, LCDML_0_2, 2, "Zuruecksetzen", mFunc_VerbrauchZuruecksetzen);
-/*--*/LCDML_add(12, LCDML_0, 3, "Starten", mFunc_startWithRealSpeed);
-/*--*/LCDML_add(13, LCDML_0, 4, "Simulierte Geschw.", NULL);
-/*--------*/LCDML_add(14, LCDML_0_4, 1, "Geschw. anpassen", mFunc_setSimulatedSpeed);
-/*--------*/LCDML_add(15, LCDML_0_4, 2, "Starten", mFunc_startWithSimulatedSpeed);
+/*--------------*/LCDML_add(5, LCDML_0_1_4, 1, "Manuell pulse/sek", mFunc_setPulsesPerMeter);
+/*--------------*/LCDML_add(6, LCDML_0_1_4, 2, "Per Messung", mFunc_setPulsesPerMeterVelocity);
+/*--------*/LCDML_add(7, LCDML_0_1, 5, "PID calibriern", NULL);
+/*--------------*/LCDML_add(8, LCDML_0_1_5, 1, "Proportional", mFunc_setPIDProportional);
+/*--------------*/LCDML_add(9, LCDML_0_1_5, 2, "Integral", mFunc_setPIDIntegral);
+/*--------------*/LCDML_add(10, LCDML_0_1_5, 3, "Ableitung", mFunc_setPIDDerivative);
+/*--------*/LCDML_add(11, LCDML_0_1, 6, "Flusssensor p/s", mFunc_setPulsesPerLiter);
+/*--------*/LCDML_add(12, LCDML_0_1, 7, "Pumpe max L/h", mFunc_setMaxLiterPerHour);
+/*--*/LCDML_add(13, LCDML_0, 2, "Verbrauch", NULL);
+/*--------*/LCDML_add(14, LCDML_0_2, 1, "Anzeigen", mFunc_Verbrauch);
+/*--------*/LCDML_add(15, LCDML_0_2, 2, "Zuruecksetzen", mFunc_VerbrauchZuruecksetzen);
+/*--*/LCDML_add(16, LCDML_0, 3, "Starten", mFunc_startWithRealSpeed);
+/*--*/LCDML_add(17, LCDML_0, 4, "Simulierte Geschw.", NULL);
+/*--------*/LCDML_add(18, LCDML_0_4, 1, "Geschw. anpassen", mFunc_setSimulatedSpeed);
+/*--------*/LCDML_add(19, LCDML_0_4, 2, "Starten", mFunc_startWithSimulatedSpeed);
 
 // menu element count - last element id
 // this value must be the same as the last menu element
-#define _LCDML_DISP_cnt    15
+#define _LCDML_DISP_cnt    19
 
 // create menu
 LCDML_createMenu(_LCDML_DISP_cnt);
@@ -113,6 +124,7 @@ void flussMesserPulseEnd() {
 
 void setup()
 {
+  Serial.begin(9600);
   loadLastValuesFromEprom();
   //used for measuring tractor and flow meter pulses
   attachInterrupt(digitalPinToInterrupt(TRAKTOR_PULSE_PIN), traktorPulseEnd, FALLING);
@@ -124,7 +136,6 @@ void setup()
   pumpPID.SetMode(AUTOMATIC);
   pumpPID.SetSampleTime(990);
   // serial init; only be needed if serial control is used
-  Serial.begin(9600);                // start serial
   // LCD Begin
   lcd.init();
   lcd.backlight();

@@ -119,23 +119,23 @@ void driveMotor() {
   repeatedDeviating = isRepeatedDeviating(flowSensorReading, wantedFlow);
   lcd.setCursor(0, 0);
   lcd.print(velocity * 3.6f);
-  lcd.print(" Km/h");
+  lcd.print(F(" Km/h"));
   lcd.setCursor(12, 0);
   snprintf(verbrauchBuffer , sizeof verbrauchBuffer, "%04d", (int)berechneVerbrauch());
   lcd.print(verbrauchBuffer);
-  lcd.print(" L");
+  lcd.print(F(" L"));
   lcd.setCursor(0, 1);
-  lcd.print("Soll: ");
+  lcd.print(F("Soll: "));
   lcd.print(pumpSetPoint*60);
-  lcd.print(" L/min");
+  lcd.print(F(" L/min"));
   lcd.setCursor(0, 2);
-  lcd.print("Ist : ");
+  lcd.print(F("Ist : "));
   lcd.print(flowSensorReading*60);
-  lcd.print(" L/min");
+  lcd.print(F(" L/min"));
   lcd.setCursor(0, 3);
-  lcd.print("Ist : ");
+  lcd.print(F("Ist : "));
   double timeForOneHektar = velocity > 0.01 ? HEKTAR_AREA / (arbeitsBreiteInDezimeter/10.0d * velocity) : 1000;
   lcd.print(flowSensorReading*timeForOneHektar);
-  lcd.print(" L/min");
+  lcd.print(F(" L/ha"));
   
 }
