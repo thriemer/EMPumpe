@@ -3,7 +3,7 @@
 void mFunc_showParameter(uint8_t param)
 // *********************************************************************
 {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
@@ -19,17 +19,17 @@ void mFunc_showParameter(uint8_t param)
     lcd.print(literProHektar);
   }
 
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  if (LCDML.FUNC_loop())  // ****** LOOP *********
   {
     // loop function, can be run in a loop when LCDML_DISP_triggerMenu(xx) is set
     // the quit button works in every DISP function without any checks; it starts the loop_end function
-    if (LCDML.BT_checkAny()) { // check if any button is pressed (enter, up, down, left, right)
+    if (LCDML.BT_checkAny()) {  // check if any button is pressed (enter, up, down, left, right)
       // LCDML_goToMenu stops a running menu function and goes to the menu
       LCDML.FUNC_goBackToMenu();
     }
   }
 
-  if (LCDML.FUNC_close())     // ****** STABLE END *********
+  if (LCDML.FUNC_close())  // ****** STABLE END *********
   {
     // you can here reset some global vars or do nothing
   }
@@ -38,8 +38,16 @@ void mFunc_showParameter(uint8_t param)
 int _localChange = -1;
 bool _exitedChangeIntVar = true;
 bool _confirmedChangeIntVar = false;
-void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int change, float multiplier, int address, uint8_t param) {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+
+int prevButtonDirection = 0;
+int buttonHoldCount = 0;
+const int changeVarLoopInterval = 100;
+const int holdTimeUntilFast = 3000;
+const int holdCountUntilFast = holdTimeUntilFast / changeVarLoopInterval;
+unsigned long prevButtonPressMillis = 0;
+
+void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, float multiplier, int address, uint8_t param) {
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
@@ -49,14 +57,16 @@ void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int chan
       _confirmedChangeIntVar = false;
     }
     lcd.setCursor(0, 0);
-    lcd.print(varName); // print some content on first row
-    LCDML.FUNC_setLoopInterval(100);
+    lcd.print(varName);  // print some content on first row
+    LCDML.FUNC_setLoopInterval(changeVarLoopInterval);
   }
 
-
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  if (LCDML.FUNC_loop())  // ****** LOOP *********
   {
+    int change = buttonHoldCount < holdCountUntilFast ? 1 : 10;
+    int button = 0;
     if (LCDML.BT_checkDown()) {
+      button = -1;
       LCDML.BT_resetDown();
       _localChange -= change;
       if (_localChange < minVal) {
@@ -64,6 +74,7 @@ void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int chan
       }
     }
     if (LCDML.BT_checkUp()) {
+      button = 1;
       LCDML.BT_resetUp();
       _localChange += change;
       if (_localChange > maxVal) {
@@ -71,14 +82,16 @@ void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int chan
       }
     }
     if (LCDML.BT_checkEnter()) {
+      button = 0;
       _confirmedChangeIntVar = true;
       LCDML.FUNC_goBackToMenu();
     }
+    holdButtonLogic(button);
     lcd.setCursor(0, 1);
     lcd.print(_localChange * multiplier);
   }
 
-  if (LCDML.FUNC_close())     // ****** STABLE END *********
+  if (LCDML.FUNC_close())  // ****** STABLE END *********
   {
     lcd.clear();
     if (*toChange != _localChange && _confirmedChangeIntVar) {
@@ -98,45 +111,66 @@ void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, int chan
     }
     _exitedChangeIntVar = true;
     _confirmedChangeIntVar = false;
-    delay(READ_DELAY);
+    buttonHoldCount = 0;
+    interuptableWait();
   }
 }
 
+void interuptableWait() {
+  unsigned long waitStart = millis();
+  while (millis() - waitStart < READ_DELAY && digitalRead(_LCDML_CONTROL_digital_quit) == HIGH && digitalRead(_LCDML_CONTROL_digital_enter) == HIGH) {
+    delay(1);
+  }
+  delay(100);
+}
+
+void holdButtonLogic(int button) {
+  if (button != 0 && button == prevButtonDirection && millis() - prevButtonPressMillis < 2 * changeVarLoopInterval) {
+    buttonHoldCount++;
+  } else {
+    buttonHoldCount = 0;
+  }
+  if (button != 0) {
+    prevButtonPressMillis = millis();
+  }
+  prevButtonDirection = button;
+}
+
 void mFunc_setArbeitsbreite(uint8_t param) {
-  changeIntVar("Arbeitsbreite", &arbeitsBreiteInDezimeter, 0, 240, 1, 0.1f, EPROM_ARBEITSBREITE, param);
+  changeIntVar("Arbeitsbreite", &arbeitsBreiteInDezimeter, 0, 240, 0.1f, EPROM_ARBEITSBREITE, param);
 }
 
 void mFunc_setLiterProHektar(uint8_t param) {
-  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 1, 1, EPROM_LITER_PRO_HEKTAR, param);
+  changeIntVar("Liter/Hektar", &literProHektar, 0, 1000, 1, EPROM_LITER_PRO_HEKTAR, param);
 }
 
 void mFunc_setPulsesPerLiter(uint8_t param) {
-  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1, 1, EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
+  changeIntVar("Pulses/Liter", flussMesser.getPulsesPerUnitPointer(), 0, 1000, 1, EPROM_FLUSSMESSER_PULSE_PER_LITER, param);
 }
 
 void mFunc_setPulsesPerMeter(uint8_t param) {
-  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1, 1, EPROM_TRAKTOR_PULSE_PER_METER, param);
+  changeIntVar("Pulses/Meter", traktorGeschwindigkeit.getPulsesPerUnitPointer(), 0, 1000, 1, EPROM_TRAKTOR_PULSE_PER_METER, param);
 }
 void mFunc_setSimulatedSpeed(uint8_t param) {
-  changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, 1, EPROM_SIMULATED_SPEED, param);
+  changeIntVar("Simul. Geschw.", &simulatedVelocity, 1, 55, 1, EPROM_SIMULATED_SPEED, param);
 }
 void mFunc_setMaxLiterPerHour(uint8_t param) {
-  changeIntVar("Pumpe max L/h", &maxLiterPerHour, 1, 2000, 1, 1, EPROM_MAX_LITER_PER_HOUR, param);
+  changeIntVar("Pumpe max L/h", &maxLiterPerHour, 1, 2000, 1, EPROM_MAX_LITER_PER_HOUR, param);
   setPIDValues();
 }
 
 void mFunc_setPIDProportional(uint8_t param) {
-  changeIntVar("PID Proportional", &pidProportional, 0, 100, 1, 0.1f, EPROM_PID_PROPORTIONAL, param);
+  changeIntVar("PID Proportional", &pidProportional, 0, 100, 0.1f, EPROM_PID_PROPORTIONAL, param);
   setPIDValues();
 }
 
 void mFunc_setPIDIntegral(uint8_t param) {
-  changeIntVar("PID Integral", &pidIntegral, 0, 100, 1, 0.1f, EPROM_PID_INTEGRAL, param);
+  changeIntVar("PID Integral", &pidIntegral, 0, 100, 0.1f, EPROM_PID_INTEGRAL, param);
   setPIDValues();
 }
 
 void mFunc_setPIDDerivative(uint8_t param) {
-  changeIntVar("PID Ableitung", &pidDerivative, 0, 100, 1, 0.1f, EPROM_PID_DERIVATIVE, param);
+  changeIntVar("PID Ableitung", &pidDerivative, 0, 100, 0.1f, EPROM_PID_DERIVATIVE, param);
   setPIDValues();
 }
 
@@ -146,8 +180,7 @@ bool _confirmedChangePulsePerMeterVelocity = false;
 void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
   int minVal = 1;
   int maxVal = 1000;
-  int change = 1;
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
@@ -157,15 +190,18 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
       _confirmedChangePulsePerMeterVelocity = false;
     }
     lcd.setCursor(0, 0);
-    lcd.print("Geschwindigkeit"); // print some content on first row
-    LCDML.FUNC_setLoopInterval(100);
+    lcd.print("Geschwindigkeit");  // print some content on first row
+    LCDML.FUNC_setLoopInterval(changeVarLoopInterval);
   }
 
 
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  if (LCDML.FUNC_loop())  // ****** LOOP *********
   {
+    int change = buttonHoldCount < holdCountUntilFast ? 1 : 10;
+    int button = 0;
     if (LCDML.BT_checkUp()) {
       LCDML.BT_resetUp();
+      button = -1;
       *traktorGeschwindigkeit.getPulsesPerUnitPointer() -= change;
       if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() < minVal) {
         *traktorGeschwindigkeit.getPulsesPerUnitPointer() = minVal;
@@ -173,15 +209,18 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
     }
     if (LCDML.BT_checkDown()) {
       LCDML.BT_resetDown();
+      button = 1;
       *traktorGeschwindigkeit.getPulsesPerUnitPointer() += change;
       if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() > maxVal) {
         *traktorGeschwindigkeit.getPulsesPerUnitPointer() = maxVal;
       }
     }
     if (LCDML.BT_checkEnter()) {
+      button = 0;
       _confirmedChangePulsePerMeterVelocity = true;
       LCDML.FUNC_goBackToMenu();
     }
+    holdButtonLogic(button);
     lcd.setCursor(0, 1);
     lcd.print(F("Pulse: "));
     lcd.print(*traktorGeschwindigkeit.getPulsesPerUnitPointer());
@@ -191,7 +230,7 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
     lcd.print(traktorGeschwindigkeit.getValue() * 3.6f);
   }
 
-  if (LCDML.FUNC_close())     // ****** STABLE END *********
+  if (LCDML.FUNC_close())  // ****** STABLE END *********
   {
     lcd.clear();
     if (*traktorGeschwindigkeit.getPulsesPerUnitPointer() != _savedTraktorPulse && _confirmedChangePulsePerMeterVelocity) {
@@ -211,13 +250,13 @@ void mFunc_setPulsesPerMeterVelocity(uint8_t param) {
     }
     _exitedChangePulsePerMeterVelocity = true;
     _confirmedChangePulsePerMeterVelocity = false;
-    delay(READ_DELAY);
+    buttonHoldCount = 0;
+    interuptableWait();
   }
-
 }
 
 void mFunc_Verbrauch(uint8_t param) {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
@@ -227,9 +266,8 @@ void mFunc_Verbrauch(uint8_t param) {
     float liter = berechneVerbrauch();
     lcd.print(liter);
   }
-  if (LCDML.FUNC_loop())
-  {
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+  if (LCDML.FUNC_loop()) {
+    if (LCDML.BT_checkAny())  // check if any button is pressed (enter, up, down, left, right)
     {
       LCDML.FUNC_goBackToMenu();  // leave this function
     }
@@ -238,7 +276,7 @@ void mFunc_Verbrauch(uint8_t param) {
 
 long startedMillis = 0;
 void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     startedMillis = millis();
@@ -255,7 +293,7 @@ void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
 }
 
 void driverMenu(uint8_t param) {
-  if (LCDML.FUNC_setup())         // ****** SETUP *********
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
   {
     // remmove compiler warnings when the param variable is not used:
     LCDML_UNUSED(param);
@@ -263,12 +301,12 @@ void driverMenu(uint8_t param) {
     lcd.clear();
     LCDML.FUNC_setLoopInterval(1000);
   }
-  if (LCDML.FUNC_loop())          // ****** LOOP *********
+  if (LCDML.FUNC_loop())  // ****** LOOP *********
   {
     driveMotor();
   }
 
-  if (LCDML.FUNC_close())    // ****** STABLE END *********
+  if (LCDML.FUNC_close())  // ****** STABLE END *********
   {
     resetErrorState();
     analogWrite(PUMP_PWM_PIN, 0);
@@ -278,10 +316,10 @@ void driverMenu(uint8_t param) {
   }
 }
 
-void resetPIDController(){
-  pumpSetPoint=0;
-  flowSensorReading=0;
-  pumpControl=0;
+void resetPIDController() {
+  pumpSetPoint = 0;
+  flowSensorReading = 0;
+  pumpControl = 0;
   pumpPID.reset();
 }
 
