@@ -1,39 +1,4 @@
 #define READ_DELAY 2000
-// *********************************************************************
-void mFunc_showParameter(uint8_t param)
-// *********************************************************************
-{
-  if (LCDML.FUNC_setup())  // ****** SETUP *********
-  {
-    // remmove compiler warnings when the param variable is not used:
-    LCDML_UNUSED(param);
-
-    // setup function
-    lcd.setCursor(0, 0);
-    lcd.print(F("Arbeitsbreite:"));
-    lcd.setCursor(15, 0);
-    lcd.print(arbeitsBreiteInDezimeter / 10.0f);
-    lcd.setCursor(0, 1);
-    lcd.print(F("L/Ha:"));
-    lcd.setCursor(6, 1);
-    lcd.print(literProHektar);
-  }
-
-  if (LCDML.FUNC_loop())  // ****** LOOP *********
-  {
-    // loop function, can be run in a loop when LCDML_DISP_triggerMenu(xx) is set
-    // the quit button works in every DISP function without any checks; it starts the loop_end function
-    if (LCDML.BT_checkAny()) {  // check if any button is pressed (enter, up, down, left, right)
-      // LCDML_goToMenu stops a running menu function and goes to the menu
-      LCDML.FUNC_goBackToMenu();
-    }
-  }
-
-  if (LCDML.FUNC_close())  // ****** STABLE END *********
-  {
-    // you can here reset some global vars or do nothing
-  }
-}
 
 int _localChange = -1;
 bool _exitedChangeIntVar = true;
@@ -43,9 +8,77 @@ int prevButtonDirection = 0;
 int buttonHoldCount = 0;
 const int changeVarLoopInterval = 100;
 const int holdTimeUntilFast = 3000;
-//divided by four because there are two additional unregistered loop 
-const int holdCountUntilFast = holdTimeUntilFast / changeVarLoopInterval/4;
+//divided by four because there are two additional unregistered loop
+const int holdCountUntilFast = holdTimeUntilFast / changeVarLoopInterval / 4;
 unsigned long prevButtonPressMillis = 0;
+
+const char* VORGEWENDE_NAME[] = { "Deaktiviert ", "Ackerschiene", "Extern +    ", "Extern -    " };
+
+void mFunc_setVorgewende(uint8_t param) {
+  if (LCDML.FUNC_setup())  // ****** SETUP *********
+  {
+    // remmove compiler warnings when the param variable is not used:
+    LCDML_UNUSED(param);
+    if (_exitedChangeIntVar) {
+      _localChange = vorgewendeStatus;
+      _exitedChangeIntVar = false;
+      _confirmedChangeIntVar = false;
+    }
+    lcd.setCursor(0, 0);
+    lcd.print(F("Vorgewende"));  // print some content on first row
+    LCDML.FUNC_setLoopInterval(changeVarLoopInterval);
+  }
+  int minVal = 0;
+  int maxVal = 3;
+
+  if (LCDML.FUNC_loop())  // ****** LOOP *********
+  {
+    if (LCDML.BT_checkDown()) {
+      LCDML.BT_resetDown();
+      _localChange--;
+      if (_localChange < minVal) {
+        _localChange = maxVal;
+      }
+    }
+    if (LCDML.BT_checkUp()) {
+      LCDML.BT_resetUp();
+      _localChange++;
+      if (_localChange > maxVal) {
+        _localChange = minVal;
+      }
+    }
+    if (LCDML.BT_checkEnter()) {
+      _confirmedChangeIntVar = true;
+      LCDML.FUNC_goBackToMenu();
+    }
+    lcd.setCursor(0, 1);
+    lcd.print(VORGEWENDE_NAME[_localChange]);
+  }
+
+  if (LCDML.FUNC_close())  // ****** STABLE END *********
+  {
+    lcd.clear();
+    if (vorgewendeStatus != _localChange && _confirmedChangeIntVar) {
+      vorgewendeStatus = _localChange;
+      lcd.setCursor(4, 0);
+      lcd.print(F("GESPEICHERT!"));
+      lcd.setCursor(5, 1);
+      lcd.print(F("Neuer Wert:"));
+      lcd.setCursor(4, 2);
+      lcd.print(VORGEWENDE_NAME[vorgewendeStatus]);
+      writeIntIntoEEPROM(EPROM_VORGEWENDE_STATUS, vorgewendeStatus);
+    } else {
+      lcd.setCursor(7, 1);
+      lcd.print(F("KEINE"));
+      lcd.setCursor(5, 2);
+      lcd.print(F("AENDERUNG"));
+    }
+    _exitedChangeIntVar = true;
+    _confirmedChangeIntVar = false;
+    buttonHoldCount = 0;
+    interuptableWait();
+  }
+}
 
 void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, float multiplier, int address, uint8_t param) {
   if (LCDML.FUNC_setup())  // ****** SETUP *********

@@ -11,7 +11,7 @@ float getVelocity() {
 
 double calculateWantedLitersPerSecondFromVelocity(float velocityInMeterPerSecond) {
   double literPerSquareMeter = literProHektar / HEKTAR_AREA;
-  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreiteInDezimeter/10.0d;
+  return literPerSquareMeter * velocityInMeterPerSecond * arbeitsBreiteInDezimeter / 10.0d;
 }
 
 int calculatePumpControlSignalFromWantedLitersPerSecond(float neededFlowInLiterPerSecond) {
@@ -69,7 +69,17 @@ void resetErrorState() {
 }
 
 bool isHeckKraftheberUnten() {
-  //TODO: fill this function
+  //manual control, dont intercept
+  if (vorgewendeStatus == DISABLED) return true;
+  if (vorgewendeStatus == ACKERSCHIENE) {
+    return digitalRead(ACKERSCHIENE_INPUT) == LOW;
+  }
+  if(vorgewendeStatus == EXTERN){
+    return digitalRead(VORGEWENDE_EXTERN_INPUT) == LOW;
+  }
+  if(vorgewendeStatus == EXTERN_INVERTED){
+    return digitalRead(VORGEWENDE_EXTERN_INPUT) == HIGH;
+  }
   return true;
 }
 
@@ -102,12 +112,13 @@ float berechneVerbrauch() {
 char verbrauchBuffer[6];
 void driveMotor() {
   float velocity = getVelocity();
-  pumpSetPoint = calculateWantedLitersPerSecondFromVelocity(velocity);
   flowSensorReading = readFlowSensor();
-  pumpPID.Compute();
-  float wantedFlow = (float) pumpControl;
-  int pumpControlSignal = calculatePumpControlSignalFromWantedLitersPerSecond(wantedFlow);
-  if (isHeckKraftheberUnten) {
+  bool heckKraftheberUntenStatus = isHeckKraftheberUnten();
+  if (heckKraftheberUntenStatus) {
+    pumpSetPoint = calculateWantedLitersPerSecondFromVelocity(velocity);
+    pumpPID.Compute();
+    float wantedFlow = (float)pumpControl;
+    int pumpControlSignal = calculatePumpControlSignalFromWantedLitersPerSecond(wantedFlow);
     analogWrite(PUMP_PWM_PIN, pumpControlSignal);
     turnSystemReadyLedOn();
     if (pumpControlSignal > 0) {
@@ -115,27 +126,37 @@ void driveMotor() {
     } else {
       turnPumpLedOff();
     }
+  } else {
+    pumpSetPoint = 0;
+    analogWrite(PUMP_PWM_PIN, 0);
+    turnPumpLedOff();
   }
   repeatedDeviating = isRepeatedDeviating(flowSensorReading, (float)pumpSetPoint);
   lcd.setCursor(0, 0);
   lcd.print(velocity * 3.6f);
   lcd.print(F(" Km/h"));
   lcd.setCursor(12, 0);
-  snprintf(verbrauchBuffer , sizeof verbrauchBuffer, "%04d", (int)berechneVerbrauch());
+  snprintf(verbrauchBuffer, sizeof verbrauchBuffer, "%04d", (int)berechneVerbrauch());
   lcd.print(verbrauchBuffer);
   lcd.print(F(" L"));
   lcd.setCursor(0, 1);
   lcd.print(F("Soll: "));
-  lcd.print(pumpSetPoint*60);
+  lcd.print(pumpSetPoint * 60);
   lcd.print(F(" L/min"));
   lcd.setCursor(0, 2);
   lcd.print(F("Ist : "));
-  lcd.print(flowSensorReading*60);
+  lcd.print(flowSensorReading * 60);
   lcd.print(F(" L/min"));
   lcd.setCursor(0, 3);
   lcd.print(F("Ist : "));
-  double timeForOneHektar = velocity > 0.01 ? HEKTAR_AREA / (arbeitsBreiteInDezimeter/10.0d * velocity) : 1000;
-  lcd.print(flowSensorReading*timeForOneHektar);
+  double timeForOneHektar = velocity > 0.01 ? HEKTAR_AREA / (arbeitsBreiteInDezimeter / 10.0d * velocity) : 1000;
+  lcd.print(flowSensorReading * timeForOneHektar);
   lcd.print(F(" L/ha"));
-  
+
+  lcd.setCursor(19, 3);
+  if(vorgewendeStatus == DISABLED){
+    lcd.print("X");
+  }else{
+    lcd.print((heckKraftheberUntenStatus ? (char)6 : (char)5));
+  }
 }

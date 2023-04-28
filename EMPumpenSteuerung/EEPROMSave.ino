@@ -8,6 +8,7 @@
 #define EPROM_PID_PROPORTIONAL 16 //2 byte
 #define EPROM_PID_INTEGRAL 18 //2 byte
 #define EPROM_PID_DERIVATIVE 20 //2 byte
+#define EPROM_VORGEWENDE_STATUS 22 //2 byte
 
 void writeIntIntoEEPROM(int address, int number)
 {
@@ -50,6 +51,7 @@ void loadLastValuesFromEprom() {
   pidProportional = readIntFromEEPROM(EPROM_PID_PROPORTIONAL);
   pidIntegral = readIntFromEEPROM(EPROM_PID_INTEGRAL);
   pidDerivative = readIntFromEEPROM(EPROM_PID_DERIVATIVE);
+  vorgewendeStatus = readIntFromEEPROM(EPROM_VORGEWENDE_STATUS);
   setPIDValues();
   Serial.println(pumpPID.GetKp());
 }
