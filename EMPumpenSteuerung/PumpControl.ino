@@ -116,7 +116,7 @@ void driveMotor() {
       turnPumpLedOff();
     }
   }
-  repeatedDeviating = isRepeatedDeviating(flowSensorReading, wantedFlow);
+  repeatedDeviating = isRepeatedDeviating(flowSensorReading, (float)pumpSetPoint);
   lcd.setCursor(0, 0);
   lcd.print(velocity * 3.6f);
   lcd.print(F(" Km/h"));

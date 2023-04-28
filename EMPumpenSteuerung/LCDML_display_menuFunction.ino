@@ -43,7 +43,8 @@ int prevButtonDirection = 0;
 int buttonHoldCount = 0;
 const int changeVarLoopInterval = 100;
 const int holdTimeUntilFast = 3000;
-const int holdCountUntilFast = holdTimeUntilFast / changeVarLoopInterval;
+//divided by four because there are two additional unregistered loop 
+const int holdCountUntilFast = holdTimeUntilFast / changeVarLoopInterval/4;
 unsigned long prevButtonPressMillis = 0;
 
 void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, float multiplier, int address, uint8_t param) {
@@ -118,6 +119,7 @@ void changeIntVar(char* varName, int* toChange, int minVal, int maxVal, float mu
 
 void interuptableWait() {
   unsigned long waitStart = millis();
+  delay(100);
   while (millis() - waitStart < READ_DELAY && digitalRead(_LCDML_CONTROL_digital_quit) == HIGH && digitalRead(_LCDML_CONTROL_digital_enter) == HIGH) {
     delay(1);
   }
@@ -125,15 +127,17 @@ void interuptableWait() {
 }
 
 void holdButtonLogic(int button) {
-  if (button != 0 && button == prevButtonDirection && millis() - prevButtonPressMillis < 2 * changeVarLoopInterval) {
-    buttonHoldCount++;
-  } else {
-    buttonHoldCount = 0;
-  }
   if (button != 0) {
-    prevButtonPressMillis = millis();
+    if (button == prevButtonDirection && millis() - prevButtonPressMillis < 4 * changeVarLoopInterval) {
+      buttonHoldCount++;
+    } else {
+      buttonHoldCount = 0;
+    }
+    if (button != 0) {
+      prevButtonPressMillis = millis();
+    }
+    prevButtonDirection = button;
   }
-  prevButtonDirection = button;
 }
 
 void mFunc_setArbeitsbreite(uint8_t param) {
@@ -287,7 +291,7 @@ void mFunc_VerbrauchZuruecksetzen(uint8_t param) {
     lcd.print("Verbrauch");
     lcd.setCursor(3, 2);
     lcd.print("zurueckgesetzt");
-    delay(READ_DELAY);
+    interuptableWait();
     LCDML.FUNC_goBackToMenu();
   }
 }
